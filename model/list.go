@@ -1,7 +1,7 @@
 package model
 
 type List struct {
-	InsId     string
+	InsId     string `gorm:"primaryKey"`
 	Owner     string
 	Exchange  string
 	Tick      string

@@ -13,5 +13,7 @@ type Asc20 struct {
 	Hash      string
 	Block     uint64
 	Timestamp uint64
+	TrxIndex  uint32
+	LogIndex  uint32
 	Valid     int8
 }

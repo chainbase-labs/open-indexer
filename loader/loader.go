@@ -3,13 +3,18 @@ package loader
 import (
 	"bufio"
 	"fmt"
+	"gorm.io/gorm"
 	"log"
 	"open-indexer/model"
+	"open-indexer/utils"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
+
+var maxBlockNumber uint64 = 0
 
 type Holder struct {
 	Address string
@@ -35,38 +40,75 @@ func LoadTransactionData(fname string) ([]*model.Transaction, error) {
 		//log.Printf(line)
 		fields := strings.Split(line, ",")
 
-		if len(fields) != 7 {
-			return nil, fmt.Errorf("invalid data format", len(fields))
+		if len(fields) != 21 {
+			return nil, fmt.Errorf("invalid data format", len(fields), ":", fields)
 		}
 
-		var data model.Transaction
-
-		data.Id = fields[0]
-		data.From = fields[1]
-		data.To = fields[2]
-
-		block, err := strconv.ParseUint(fields[3], 10, 32)
+		block, err := strconv.ParseUint(fields[15], 10, 32)
 		if err != nil {
 			return nil, err
 		}
-		data.Block = block
 
-		idx, err := strconv.ParseUint(fields[4], 10, 32)
+		if block < maxBlockNumber {
+			continue
+		}
+
+		var data model.TransactionETL
+
+		data.Hash = fields[0]
+		nonce, err := strconv.ParseUint(fields[1], 10, 64)
 		if err != nil {
 			return nil, err
 		}
-		data.Block = block
+		data.Nonce = nonce
 
-		data.Idx = uint32(idx)
-
-		blockTime, err := strconv.ParseUint(fields[5], 10, 32)
+		txridx, err := strconv.ParseUint(fields[2], 10, 64)
 		if err != nil {
 			return nil, err
 		}
-		data.Timestamp = blockTime
-		data.Input = fields[6]
+		data.TransactionIndex = uint32(txridx)
 
-		trxs = append(trxs, &data)
+		data.FromAddress = fields[3]
+		data.ToAddress = fields[4]
+		data.Value = fields[5]
+		data.Gas = fields[6]
+		data.GasPrice = fields[7]
+		data.Input = fields[8]
+		data.ReceiptCumulativeGasUsed = fields[9]
+		data.ReceiptGasUsed = fields[10]
+
+		data.ReceiptContractAddress = fields[11]
+		data.ReceiptRoot = fields[12]
+
+		recStatus, err := strconv.ParseUint(fields[13], 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		data.ReceiptStatus = uint8(recStatus)
+
+		blockTime, err := strconv.ParseUint(fields[14], 10, 32)
+		if err != nil {
+			return nil, err
+		}
+		data.BlockTimestamp = blockTime
+
+		data.BlockNumber = block
+
+		data.BlockHash = fields[16]
+		data.MaxFeePerGas = fields[17]
+		data.MaxPriorityFeePerGas = fields[18]
+
+		txrType, err := strconv.ParseUint(fields[19], 10, 32)
+		if err != nil {
+			return nil, err
+		}
+		data.TransactionType = txrType
+
+		data.ReceiptEffectiveGasPrice = fields[20]
+
+		dataEtl := ConvertTransactionETLToTransaction(data)
+
+		trxs = append(trxs, &dataEtl)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -95,45 +137,53 @@ func LoadLogData(fname string) ([]*model.EvmLog, error) {
 		//log.Printf(line)
 		fields := strings.Split(line, ",")
 
-		if len(fields) != 11 {
+		if len(fields) != 12 {
 			return nil, fmt.Errorf("invalid data format", len(fields))
 		}
 
-		var log model.EvmLog
-
-		log.Hash = fields[0]
-		log.Address = fields[1]
-		log.Topic0 = fields[2]
-		log.Topic1 = fields[3]
-		log.Topic2 = fields[4]
-		log.Topic3 = fields[5]
-		log.Data = fields[6]
-
-		block, err := strconv.ParseUint(fields[7], 10, 32)
+		blockNumber, err := strconv.ParseUint(fields[9], 10, 64)
 		if err != nil {
 			return nil, err
 		}
-		log.Block = block
+		if blockNumber <= maxBlockNumber {
+			continue
+		}
+		var log model.EvmLogETL
 
-		trxIdx, err := strconv.ParseUint(fields[8], 10, 32)
+		logIdx, err := strconv.ParseUint(fields[0], 10, 32)
 		if err != nil {
 			return nil, err
 		}
-		logIdx, err := strconv.ParseUint(fields[9], 10, 32)
-		if err != nil {
-			return nil, err
-		}
-
-		log.TrxIndex = uint32(trxIdx)
 		log.LogIndex = uint32(logIdx)
 
-		blockTime, err := strconv.ParseUint(fields[10], 10, 32)
+		log.TransactionHash = fields[1]
+
+		trxIdx, err := strconv.ParseUint(fields[2], 10, 32)
 		if err != nil {
 			return nil, err
 		}
-		log.Timestamp = blockTime
+		log.TransactionIndex = uint32(trxIdx)
 
-		logs = append(logs, &log)
+		log.Address = fields[3]
+		log.Data = fields[4]
+		log.Topic0 = fields[5]
+		log.Topic1 = fields[6]
+		log.Topic2 = fields[7]
+		log.Topic3 = fields[8]
+
+		log.BlockNumber = blockNumber
+
+		blockTimestamp, err := strconv.ParseUint(fields[10], 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		log.BlockTimestamp = blockTimestamp
+
+		log.BlockHash = fields[11]
+
+		var evmLog = ConvertEvmLogETLToEvmLog(log)
+
+		logs = append(logs, &evmLog)
 	}
 
 	return logs, nil
@@ -195,4 +245,184 @@ func DumpTickerInfoMap(fname string,
 			)
 		}
 	}
+}
+
+func ConvertEvmLogETLToEvmLog(etlLog model.EvmLogETL) model.EvmLog {
+	return model.EvmLog{
+		Hash:      etlLog.TransactionHash,
+		Address:   etlLog.Address,
+		Topic0:    etlLog.Topic0,
+		Topic1:    etlLog.Topic1,
+		Topic2:    etlLog.Topic2,
+		Topic3:    etlLog.Topic3,
+		Data:      etlLog.Data,
+		Block:     etlLog.BlockNumber,
+		TrxIndex:  etlLog.TransactionIndex,
+		LogIndex:  etlLog.LogIndex,
+		Timestamp: etlLog.BlockTimestamp,
+	}
+}
+
+func ConvertTransactionETLToTransaction(etl model.TransactionETL) model.Transaction {
+	return model.Transaction{
+		Id:            etl.Hash,
+		From:          etl.FromAddress,
+		To:            etl.ToAddress,
+		Block:         etl.BlockNumber,
+		Idx:           etl.TransactionIndex,
+		Timestamp:     etl.BlockTimestamp,
+		Input:         etl.Input,
+		ReceiptStatus: int8(etl.ReceiptStatus),
+	}
+}
+
+func ConvertTokensToTokenInfos(tokens map[string]*model.Token) []*model.TokenInfo {
+	var tokenInfos []*model.TokenInfo
+	for _, token := range tokens {
+		tokenInfo := &model.TokenInfo{
+			BlockTimestamp: time.Unix(int64(token.CreatedAt), 0),
+			BlockNumber:    token.CreatedBlockNumber,
+			ID:             strconv.FormatUint(token.Number, 10),
+			TxIndex:        token.TxIndex,
+			TxHash:         token.TxHash,
+			Tick:           token.Tick,
+			MaxSupply:      token.Max,
+			Lim:            token.Limit,
+			Wlim:           nil,
+			Dec:            token.Precision,
+			Creator:        token.Creator,
+			Minted:         token.Minted,
+			Holders:        token.Holders,
+			Txs:            token.Trxs,
+			UpdatedAt:      time.Unix(int64(token.UpdatedAt), 0),
+		}
+		if token.CompletedAt != 0 {
+			t := time.Unix(int64(token.CompletedAt), 0)
+			tokenInfo.CompletedAt = &t
+		}
+		tokenInfos = append(tokenInfos, tokenInfo)
+	}
+
+	return tokenInfos
+}
+
+func ConvertAsc20sToTokenActivities(asc20s []*model.Asc20) []*model.TokenActivity {
+	var tokenActivities []*model.TokenActivity
+	for _, asc20 := range asc20s {
+		if (asc20.Operation == "list" || asc20.Operation == "mint" || asc20.Operation == "transfer" || asc20.Operation == "exchange") && asc20.Valid == 1 {
+			tokenActivity := &model.TokenActivity{
+				BlockTimestamp: time.Unix(int64(asc20.Timestamp), 0),
+				BlockNumber:    asc20.Block,
+				TxIndex:        asc20.TrxIndex,
+				TxHash:         asc20.Hash,
+				LogIndex:       asc20.LogIndex,
+				Type:           asc20.Operation,
+				Tick:           asc20.Tick,
+				ID:             strconv.FormatUint(asc20.Number, 10),
+				Amt:            asc20.Amount,
+				FromAddress:    asc20.From,
+				ToAddress:      asc20.To,
+			}
+			tokenActivities = append(tokenActivities, tokenActivity)
+		}
+	}
+	return tokenActivities
+}
+
+func LoadTokenInfo(db *gorm.DB) ([]*model.Token, error) {
+	var tokenInfos []*model.TokenInfo
+	var tokens []*model.Token
+
+	err := db.Find(&tokenInfos).Error
+	if err != nil {
+		return tokens, err
+	}
+
+	for _, tokenInfo := range tokenInfos {
+		if tokenInfo.BlockNumber > maxBlockNumber {
+			maxBlockNumber = tokenInfo.BlockNumber
+		}
+		var completedAt uint64
+		if tokenInfo.CompletedAt == nil {
+			completedAt = 0
+		}
+
+		var num uint64
+
+		if tokenInfo.ID != "" {
+			num, err = strconv.ParseUint(tokenInfo.ID, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		token := &model.Token{
+			Tick:               tokenInfo.Tick,
+			Number:             num,
+			CreatedBlockNumber: tokenInfo.BlockNumber,
+			Precision:          tokenInfo.Dec,
+			Max:                tokenInfo.MaxSupply,
+			Limit:              tokenInfo.Lim,
+			Minted:             tokenInfo.Minted,
+			Progress:           0,
+			Holders:            tokenInfo.Holders,
+			Trxs:               tokenInfo.Txs,
+			CreatedAt:          uint64(tokenInfo.BlockTimestamp.Unix()),
+			UpdatedAt:          uint64(tokenInfo.UpdatedAt.Unix()),
+			CompletedAt:        completedAt,
+			Hash:               utils.Keccak256(strings.ToLower(tokenInfo.Tick)),
+			TxHash:             tokenInfo.TxHash,
+			TxIndex:            tokenInfo.TxIndex,
+			Creator:            tokenInfo.Creator,
+		}
+		tokens = append(tokens, token)
+	}
+	return tokens, nil
+}
+
+func LoadTokenBalances(db *gorm.DB) ([]*model.TokenBalance, error) {
+	var tokenBalances []*model.TokenBalance
+	err := db.Find(&tokenBalances).Error
+	if err != nil {
+		return tokenBalances, err
+	}
+	for _, tokenBalance := range tokenBalances {
+		if tokenBalance.BlockNumber > maxBlockNumber {
+			maxBlockNumber = tokenBalance.BlockNumber
+		}
+	}
+	return tokenBalances, nil
+}
+
+func LoadList(db *gorm.DB) ([]*model.List, error) {
+	var tokenActivities []*model.TokenActivity
+	var lists []*model.List
+
+	err := db.Find(&tokenActivities).Error
+	if err != nil {
+		return lists, err
+	}
+
+	for _, activity := range tokenActivities {
+		if activity.BlockNumber > maxBlockNumber {
+			maxBlockNumber = activity.BlockNumber
+		}
+		if activity.Type == "list" {
+			amount, precision, err := model.NewDecimalFromString(activity.Amt.String())
+			if err != nil {
+				return nil, fmt.Errorf("error converting Amt to *DDecimal: %v", err)
+			}
+
+			list := &model.List{
+				InsId:     activity.TxHash,
+				Owner:     activity.FromAddress,
+				Exchange:  activity.ToAddress,
+				Tick:      activity.Tick,
+				Amount:    amount,
+				Precision: precision,
+			}
+			lists = append(lists, list)
+		}
+	}
+	return lists, nil
 }

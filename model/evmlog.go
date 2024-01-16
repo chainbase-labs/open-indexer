@@ -1,17 +1,17 @@
 package model
 
 type EvmLog struct {
-	Hash      string
-	Address   string
-	Topic0    string
-	Topic1    string
-	Topic2    string
-	Topic3    string
-	Data      string
-	Block     uint64
-	TrxIndex  uint32
-	LogIndex  uint32
-	Timestamp uint64
+	Hash      string `gorm:"column:hash;primaryKey"`
+	Address   string `gorm:"column:address"`
+	Topic0    string `gorm:"column:topic0"`
+	Topic1    string `gorm:"column:topic1"`
+	Topic2    string `gorm:"column:topic2"`
+	Topic3    string `gorm:"column:topic3"`
+	Data      string `gorm:"column:data"`
+	Block     uint64 `gorm:"column:block_number"`
+	TrxIndex  uint32 `gorm:"column:tx_index"`
+	LogIndex  uint32 `gorm:"column:log_index;primaryKey"`
+	Timestamp uint64 `gorm:"column:number"`
 }
 
 //func NewEvmLogFromMixData(mixData *MixData) *EvmLog {

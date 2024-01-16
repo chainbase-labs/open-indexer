@@ -1,0 +1,7 @@
+{
+  "tidb_user": "root",
+  "tidb_password": "",
+  "tidb_host": "localhost",
+  "tidb_port": "4000",
+  "tidb_db_name": "avas"
+}
