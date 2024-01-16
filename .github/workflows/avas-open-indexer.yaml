@@ -2,8 +2,6 @@ name: Avas-open-indexer Publish
 
 on:
   push:
-    branches:
-      - chainbase
     tags:
       - "*"
 
