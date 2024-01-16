@@ -20,11 +20,55 @@ var userBalances = make(map[string]map[string]*model.DDecimal)
 var tokenHolders = make(map[string]map[string]*model.DDecimal)
 var tokensByHash = make(map[string]*model.Token)
 var lists = make(map[string]*model.List)
-
+var tokenBalances = make(map[string]map[string]*model.TokenBalance)
 var inscriptionNumber uint64 = 0
 
 func GetInfo() (map[string]*model.Token, map[string]map[string]*model.DDecimal, map[string]map[string]*model.DDecimal) {
 	return tokens, userBalances, tokenHolders
+}
+
+func GetTokenBalances() map[string]map[string]*model.TokenBalance {
+	return tokenBalances
+}
+
+func GetTokenInfo() map[string]*model.Token {
+	return tokens
+}
+
+func GetAsc20() []*model.Asc20 {
+	return asc20Records
+}
+
+func GetInscriptions() []*model.Inscription {
+	return inscriptions
+}
+
+func GetLogEvents() []*model.EvmLog {
+	return logEvents
+}
+
+func SetTokens(tokeninfos []*model.Token) {
+	for _, token := range tokeninfos {
+		tokens[strings.ToLower(token.Tick)] = token
+		tokenHolders[strings.ToLower(token.Tick)] = make(map[string]*model.DDecimal)
+		tokensByHash[token.Hash] = token
+	}
+}
+
+func SetLists(listList []*model.List) {
+	for _, list := range listList {
+		lists[list.InsId] = list
+	}
+}
+
+func SetTokenBalances(tokenBalances []*model.TokenBalance) error {
+	for _, balance := range tokenBalances {
+		_, err := addBalance(balance.WalletAddress, balance.Tick, balance.Amount, balance.BlockNumber, uint64(balance.BlockTimestamp.Unix()))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func MixRecords(trxs []*model.Transaction, logs []*model.EvmLog) []*model.Record {
@@ -79,6 +123,10 @@ func ProcessRecords(records []*model.Record) error {
 }
 
 func indexTransaction(trx *model.Transaction) error {
+	if trx.ReceiptStatus != 1 {
+		logger.Warn("transaction invalid at block ", trx.Block, ":", trx.Idx)
+		return nil
+	}
 	// data:,
 	if !strings.HasPrefix(trx.Input, "0x646174613a") {
 		return nil
@@ -147,6 +195,8 @@ func indexLog(log *model.EvmLog) error {
 	asc20.Block = log.Block
 	asc20.Timestamp = log.Timestamp
 	asc20.Hash = log.Hash
+	asc20.LogIndex = log.LogIndex
+	asc20.TrxIndex = log.TrxIndex
 	if topicType == 1 {
 		// transfer
 		if asc20.From == log.Address {
@@ -188,7 +238,7 @@ func indexLog(log *model.EvmLog) error {
 
 				// do transfer
 				var err error
-				asc20.Valid, err = exchangeToken(list, asc20.To)
+				asc20.Valid, err = exchangeToken(list, asc20.To, asc20.Block, asc20.Timestamp)
 				if err != nil {
 					return err
 				}
@@ -236,7 +286,7 @@ func handleProtocols(inscription *model.Inscription) error {
 					asc20.Timestamp = inscription.Timestamp
 					asc20.Hash = inscription.Id
 					if value, ok = protoData["tick"]; ok {
-						asc20.Tick = value
+						asc20.Tick = strings.ToLower(value)
 					}
 					if value, ok = protoData["op"]; ok {
 						asc20.Operation = value
@@ -273,7 +323,6 @@ func handleProtocols(inscription *model.Inscription) error {
 }
 
 func deployToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
-
 	value, ok := params["max"]
 	if !ok {
 		return -11, nil
@@ -317,16 +366,21 @@ func deployToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 	}
 
 	token := &model.Token{
-		Tick:        asc20.Tick,
-		Number:      asc20.Number,
-		Precision:   precision,
-		Max:         max,
-		Limit:       limit,
-		Minted:      model.NewDecimal(),
-		Progress:    0,
-		CreatedAt:   asc20.Timestamp,
-		CompletedAt: int64(0),
-		Hash:        utils.Keccak256(strings.ToLower(asc20.Tick)),
+		Tick:               asc20.Tick,
+		Number:             asc20.Number,
+		Precision:          precision,
+		Max:                max,
+		Limit:              limit,
+		Minted:             model.NewDecimal(),
+		Progress:           0,
+		CreatedAt:          asc20.Timestamp,
+		CompletedAt:        0,
+		Hash:               utils.Keccak256(strings.ToLower(asc20.Tick)),
+		TxHash:             asc20.Hash,
+		Creator:            asc20.From,
+		TxIndex:            asc20.TrxIndex,
+		CreatedBlockNumber: asc20.Block,
+		UpdatedAt:          asc20.Timestamp,
 	}
 
 	// save
@@ -384,7 +438,7 @@ func mintToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 	asc20.Amount = amt
 	asc20.Precision = precision
 
-	newHolder, err := addBalance(asc20.To, tick, amt)
+	newHolder, err := addBalance(asc20.To, tick, amt, asc20.Block, asc20.Timestamp)
 	if err != nil {
 		return 0, err
 	}
@@ -400,11 +454,12 @@ func mintToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 	}
 
 	if token.Minted.Cmp(token.Max) == 0 {
-		token.CompletedAt = time.Now().Unix()
+		token.CompletedAt = uint64(time.Now().Unix())
 	}
 	if newHolder {
 		token.Holders++
 	}
+	token.UpdatedAt = uint64(time.Now().Unix())
 
 	return 1, err
 }
@@ -460,7 +515,7 @@ func listToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 	asc20.Amount = amt
 
 	// sub balance
-	reduceHolder, err := subBalance(asc20.From, tick, amt)
+	reduceHolder, err := subBalance(asc20.From, tick, amt, asc20.Block, asc20.Timestamp)
 	if err != nil {
 		if err.Error() == "insufficient balance" {
 			return -37, nil
@@ -488,10 +543,10 @@ func listToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 	return 1, err
 }
 
-func exchangeToken(list *model.List, sendTo string) (int8, error) {
+func exchangeToken(list *model.List, sendTo string, number uint64, timestamp uint64) (int8, error) {
 
 	// add balance
-	newHolder, err := addBalance(sendTo, list.Tick, list.Amount)
+	newHolder, err := addBalance(sendTo, list.Tick, list.Amount, number, timestamp)
 	if err != nil {
 		return 0, err
 	}
@@ -543,7 +598,7 @@ func _transferToken(asc20 *model.Asc20) (int8, error) {
 	}
 
 	// From
-	reduceHolder, err := subBalance(asc20.From, tick, asc20.Amount)
+	reduceHolder, err := subBalance(asc20.From, tick, asc20.Amount, asc20.Block, asc20.Timestamp)
 	if err != nil {
 		if err.Error() == "insufficient balance" {
 			return -37, nil
@@ -552,7 +607,7 @@ func _transferToken(asc20 *model.Asc20) (int8, error) {
 	}
 
 	// To
-	newHolder, err := addBalance(asc20.To, tick, asc20.Amount)
+	newHolder, err := addBalance(asc20.To, tick, asc20.Amount, asc20.Block, asc20.Timestamp)
 	if err != nil {
 		return 0, err
 	}
@@ -569,7 +624,7 @@ func _transferToken(asc20 *model.Asc20) (int8, error) {
 	return 1, err
 }
 
-func subBalance(owner string, tick string, amount *model.DDecimal) (bool, error) {
+func subBalance(owner string, tick string, amount *model.DDecimal, number uint64, timestamp uint64) (bool, error) {
 	token, exists := tokens[strings.ToLower(tick)]
 	if !exists {
 		return false, errors.New("token not found")
@@ -594,10 +649,33 @@ func subBalance(owner string, tick string, amount *model.DDecimal) (bool, error)
 	fromBalances[token.Tick] = fromBalance
 	tokenHolders[token.Tick][owner] = fromBalance
 
+	tickHolders, ok := tokenBalances[token.Tick]
+	if !ok {
+		tickHolders = make(map[string]*model.TokenBalance)
+		tokenBalances[tick] = tickHolders
+	}
+
+	ownerBalance, ok := tickHolders[owner]
+	if !ok {
+		tickHolders[owner] = &model.TokenBalance{
+			BlockNumber:    number,
+			BlockTimestamp: time.Unix(int64(timestamp), 0),
+			Tick:           tick,
+			WalletAddress:  owner,
+			TotalSupply:    token.Max,
+			Amount:         fromBalance,
+		}
+	} else {
+		ownerBalance.Amount = fromBalance
+		ownerBalance.Amount = fromBalance
+		ownerBalance.BlockNumber = number
+		ownerBalance.BlockTimestamp = time.Unix(int64(timestamp), 0)
+	}
+
 	return reduceHolder, nil
 }
 
-func addBalance(owner string, tick string, amount *model.DDecimal) (bool, error) {
+func addBalance(owner string, tick string, amount *model.DDecimal, number uint64, timestamp uint64) (bool, error) {
 	token, exists := tokens[strings.ToLower(tick)]
 	if !exists {
 		return false, errors.New("token not found")
@@ -623,6 +701,28 @@ func addBalance(owner string, tick string, amount *model.DDecimal) (bool, error)
 	// save
 	toBalances[token.Tick] = toBalance
 	tokenHolders[token.Tick][owner] = toBalance
+
+	tickHolders, ok := tokenBalances[token.Tick]
+	if !ok {
+		tickHolders = make(map[string]*model.TokenBalance)
+		tokenBalances[tick] = tickHolders
+	}
+
+	ownerBalance, ok := tickHolders[owner]
+	if !ok {
+		tickHolders[owner] = &model.TokenBalance{
+			BlockNumber:    number,
+			BlockTimestamp: time.Unix(int64(timestamp), 0),
+			Tick:           tick,
+			WalletAddress:  owner,
+			TotalSupply:    token.Max,
+			Amount:         toBalance,
+		}
+	} else {
+		ownerBalance.Amount = toBalance
+		ownerBalance.BlockNumber = number
+		ownerBalance.BlockTimestamp = time.Unix(int64(timestamp), 0)
+	}
 
 	return newHolder, nil
 }
