@@ -67,6 +67,14 @@ func GetDBInstanceByConfigFile(file_name string) (*gorm.DB, error) {
 	return db, err
 }
 
+func GetDBInstanceByEnv() (*gorm.DB, error) {
+	var err error
+	once.Do(func() {
+		db, err = createDB(os.Getenv("tidb_user"), os.Getenv("tidb_password"), os.Getenv("tidb_host"), os.Getenv("tidb_port"), os.Getenv("tidb_db_name"))
+	})
+	return db, err
+}
+
 func Upsert[T any](db *gorm.DB, datas []T) error {
 	for _, data := range datas {
 		if err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&data).Error; err != nil {

@@ -32,7 +32,7 @@ func main() {
 
 	logger.Info("start index")
 
-	db, err := tidb.GetDBInstanceByConfigFile("tidb_config.json")
+	db, err := tidb.GetDBInstanceByEnv()
 
 	tokenList, err := loader.LoadTokenInfo(db)
 	if err != nil {
