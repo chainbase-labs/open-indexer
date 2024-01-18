@@ -16,9 +16,9 @@ func init() {
 
 func initLogger() {
 	writerStd := os.Stdout
-	writerFile, err := os.OpenFile("logs.txt", os.O_WRONLY|os.O_CREATE, 0755)
+	writerFile, err := os.OpenFile("go_program_logs.txt", os.O_WRONLY|os.O_CREATE, 0755)
 	if err != nil {
-		logrus.Fatalf("create file log.txt failed: %v", err)
+		logrus.Fatalf("create file go_program_logs.txt failed: %v", err)
 	}
 
 	logger = logrus.New()

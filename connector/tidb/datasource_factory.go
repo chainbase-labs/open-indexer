@@ -7,8 +7,10 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
+	"open-indexer/handlers"
 	"open-indexer/model"
 	"os"
+	"reflect"
 	"sync"
 )
 
@@ -76,11 +78,13 @@ func GetDBInstanceByEnv() (*gorm.DB, error) {
 }
 
 func Upsert[T any](db *gorm.DB, datas []T) error {
+	var logger = handlers.GetLogger()
 	for _, data := range datas {
 		if err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&data).Error; err != nil {
 			return err
 		}
 	}
+	logger.Infof("Insert into db successed, items %d %s", len(datas), reflect.TypeOf(*new(T)))
 	return nil
 }
 

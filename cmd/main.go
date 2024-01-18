@@ -73,15 +73,9 @@ func main() {
 		logger.Fatalf("process error, %s", err)
 	}
 
-	logger.Info("successed")
-
-	// print
-	tokens, userBalances, tokenHolders := handlers.GetInfo()
-	loader.DumpTickerInfoMap(outputfile, tokens, userBalances, tokenHolders)
-
 	tokenBalances := handlers.GetTokenBalances()
 
-	tokens = handlers.GetTokenInfo()
+	tokens := handlers.GetTokenInfo()
 	tokenInfos := loader.ConvertTokensToTokenInfos(tokens)
 
 	asc20s := handlers.GetAsc20()
@@ -90,6 +84,10 @@ func main() {
 	inscriptions := handlers.GetInscriptions()
 	logEvents := handlers.GetLogEvents()
 
-	tidb.ProcessUpsert(db, inscriptions, logEvents, tokenInfos, tokenActivities, tokenBalances)
+	err = tidb.ProcessUpsert(db, inscriptions, logEvents, tokenInfos, tokenActivities, tokenBalances)
+	if err != nil {
+		logger.Fatalf("process error, %s", err)
+	}
 
+	logger.Info("Index successed")
 }
