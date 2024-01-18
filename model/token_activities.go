@@ -15,3 +15,7 @@ type TokenActivity struct {
 	FromAddress    string    `gorm:"column:from_address"`
 	ToAddress      string    `gorm:"column:to_address"`
 }
+
+func (TokenActivity) TableName() string {
+	return "token_activities"
+}

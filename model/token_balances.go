@@ -10,3 +10,7 @@ type TokenBalance struct {
 	TotalSupply    *DDecimal `gorm:"column:total_supply;type:decimal(38,0)"`
 	Amount         *DDecimal `gorm:"column:amount;type:decimal(38,0)"`
 }
+
+func (TokenBalance) TableName() string {
+	return "token_balances"
+}

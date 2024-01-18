@@ -11,3 +11,7 @@ type Inscription struct {
 	ContentType string `gorm:"column:content_type"`
 	Content     string `gorm:"column:content"`
 }
+
+func (Inscription) TableName() string {
+	return "inscriptions"
+}

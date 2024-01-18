@@ -14,6 +14,10 @@ type EvmLog struct {
 	Timestamp uint64 `gorm:"column:number"`
 }
 
+func (EvmLog) TableName() string {
+	return "evm_logs"
+}
+
 //func NewEvmLogFromMixData(mixData *MixData) *EvmLog {
 //	logEvent := mixData.LogEvent
 //	topic0 := ""

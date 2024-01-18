@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"gorm.io/gorm"
 	"log"
+	"open-indexer/connector/tidb"
 	"open-indexer/model"
 	"open-indexer/utils"
 	"os"
@@ -22,7 +23,6 @@ type Holder struct {
 }
 
 func LoadTransactionData(fname string) ([]*model.Transaction, error) {
-
 	file, err := os.Open(fname)
 	if err != nil {
 		return nil, err
@@ -332,8 +332,17 @@ func ConvertAsc20sToTokenActivities(asc20s []*model.Asc20) []*model.TokenActivit
 func LoadTokenInfo(db *gorm.DB) ([]*model.Token, error) {
 	var tokenInfos []*model.TokenInfo
 	var tokens []*model.Token
+	tableName := model.TokenInfo{}.TableName()
+	exist, err := tidb.JudgeTableExistOrNot(db, tableName)
+	if !exist {
+		return tokens, nil
+	}
 
-	err := db.Find(&tokenInfos).Error
+	if err != nil {
+		return tokens, err
+	}
+
+	err = db.Find(&tokenInfos).Error
 	if err != nil {
 		return tokens, err
 	}
@@ -382,7 +391,16 @@ func LoadTokenInfo(db *gorm.DB) ([]*model.Token, error) {
 
 func LoadTokenBalances(db *gorm.DB) ([]*model.TokenBalance, error) {
 	var tokenBalances []*model.TokenBalance
-	err := db.Find(&tokenBalances).Error
+
+	exist, err := tidb.JudgeTableExistOrNot(db, model.TokenBalance{}.TableName())
+	if !exist {
+		return tokenBalances, nil
+	}
+	if err != nil {
+		return tokenBalances, err
+	}
+
+	err = db.Find(&tokenBalances).Error
 	if err != nil {
 		return tokenBalances, err
 	}
@@ -398,7 +416,15 @@ func LoadList(db *gorm.DB) ([]*model.List, error) {
 	var tokenActivities []*model.TokenActivity
 	var lists []*model.List
 
-	err := db.Find(&tokenActivities).Error
+	exist, err := tidb.JudgeTableExistOrNot(db, model.TokenActivity{}.TableName())
+	if !exist {
+		return lists, nil
+	}
+	if err != nil {
+		return lists, err
+	}
+
+	err = db.Find(&tokenActivities).Error
 	if err != nil {
 		return lists, err
 	}

@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
+	"log"
 	"open-indexer/handlers"
 	"open-indexer/model"
 	"os"
@@ -18,6 +19,15 @@ var (
 	db   *gorm.DB
 	once sync.Once
 )
+
+var tblCreateSqlMap = make(map[string]string)
+var initFilePath = "./data/init/"
+
+func init() {
+	tblCreateSqlMap["token_info"] = initFilePath + "create_token_info.sql"
+	tblCreateSqlMap["token_activities"] = initFilePath + "create_token_activities.sql"
+	tblCreateSqlMap["token_balances"] = initFilePath + "create_token_balances.sql"
+}
 
 type Config struct {
 	TiDBUser     string `json:"tidb_user"`
@@ -56,6 +66,47 @@ func createDB(tidb_user string, tidb_password string, tidb_host string, tidb_por
 	return db, nil
 }
 
+func JudgeTableExistOrNot(db *gorm.DB, tableName string) (bool, error) {
+	var count int
+	db.Raw("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?", tableName).Scan(&count)
+
+	if count == 0 {
+		return false, nil
+	}
+	return true, nil
+}
+
+func CreateTableIfNotExist[T any](db *gorm.DB, table T, tableName string) error {
+	exist, err := JudgeTableExistOrNot(db, tableName)
+	if !exist {
+		filePath, ok := tblCreateSqlMap[tableName]
+		if !ok {
+			tType := reflect.TypeOf(*new(T))
+			instance := reflect.New(tType).Interface()
+			err := db.AutoMigrate(instance)
+			if err != nil {
+				log.Fatalf("Create table %s failed: %v", tableName, err)
+				return err
+			}
+		} else {
+			content, err := os.ReadFile(filePath)
+			if err != nil {
+				log.Fatalf("Error reading SQL file: %v", err)
+			}
+			sql := string(content)
+			err = db.Exec(sql).Error
+			if err != nil {
+				log.Fatalf("Create table %s failed: %v", tableName, err)
+				return err
+			}
+		}
+	}
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func GetDBInstanceByConfigFile(file_name string) (*gorm.DB, error) {
 	var err error
 	once.Do(func() {
@@ -84,11 +135,17 @@ func Upsert[T any](db *gorm.DB, datas []T) error {
 			return err
 		}
 	}
-	logger.Infof("Insert into db successed, items %d %s", len(datas), reflect.TypeOf(*new(T)))
+	logger.Infof("Upsert into db successed, items %d %s", len(datas), reflect.TypeOf(*new(T)))
 	return nil
 }
 
 func ProcessUpsert(db *gorm.DB, inscriptions []*model.Inscription, logEvents []*model.EvmLog, tokens []*model.TokenInfo, tokenActivities []*model.TokenActivity, tokenBalances map[string]map[string]*model.TokenBalance) error {
+	CreateTableIfNotExist(db, model.Inscription{}, model.Inscription{}.TableName())
+	CreateTableIfNotExist(db, model.EvmLog{}, model.EvmLog{}.TableName())
+	CreateTableIfNotExist(db, model.TokenInfo{}, model.TokenInfo{}.TableName())
+	CreateTableIfNotExist(db, model.TokenActivity{}, model.TokenActivity{}.TableName())
+	CreateTableIfNotExist(db, model.TokenBalance{}, model.TokenBalance{}.TableName())
+
 	tx := db.Begin()
 	if tx.Error != nil {
 		return tx.Error
