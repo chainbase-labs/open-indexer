@@ -11,13 +11,13 @@ import (
 var (
 	inputfile1 string
 	inputfile2 string
-	outputfile string
+	//outputfile string
 )
 
 func init() {
 	flag.StringVar(&inputfile1, "transactions", "", "the filename of input data, default(./data/transactions.input.txt)")
 	flag.StringVar(&inputfile2, "logs", "", "the filename of input data, default(./data/logs.input.txt)")
-	flag.StringVar(&outputfile, "output", "./data/asc20.output.txt", "the filename of output result, default(./data/asc20.output.txt)")
+	//flag.StringVar(&outputfile, "output", "", "the filename of output result, default(./data/asc20.output.txt)")
 
 	flag.Parse()
 
