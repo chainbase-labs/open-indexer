@@ -454,12 +454,12 @@ func mintToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 	}
 
 	if token.Minted.Cmp(token.Max) == 0 {
-		token.CompletedAt = uint64(time.Now().Unix())
+		token.CompletedAt = asc20.Timestamp
 	}
 	if newHolder {
 		token.Holders++
 	}
-	token.UpdatedAt = uint64(time.Now().Unix())
+	token.UpdatedAt = asc20.Timestamp
 
 	return 1, err
 }

@@ -9,7 +9,7 @@ type Inscription struct {
 	Idx         uint32 `gorm:"column:idx"`
 	Timestamp   uint64 `gorm:"column:timestamp"`
 	ContentType string `gorm:"column:content_type"`
-	Content     string `gorm:"column:content;type:blob"`
+	Content     string `gorm:"column:content;type:MEDIUMBLOB"`
 }
 
 func (Inscription) TableName() string {
