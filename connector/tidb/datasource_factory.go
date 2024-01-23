@@ -57,7 +57,7 @@ func createDB(tidb_user string, tidb_password string, tidb_host string, tidb_por
 		tidb_user, tidb_password, tidb_host, tidb_port, tidb_db_name)
 
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Warn),
+		Logger: logger.Default.LogMode(logger.Error),
 	})
 
 	if err != nil {
@@ -124,14 +124,27 @@ func GetDBInstanceByEnv() (*gorm.DB, error) {
 	return db, err
 }
 
-func Upsert[T any](db *gorm.DB, datas []T) error {
+func batchUpsert[T any](db *gorm.DB, datas []T, batchSize int) error {
+	if len(datas) == 0 {
+		return nil
+	}
+
 	var logger = handlers.GetLogger()
-	for _, data := range datas {
-		if err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&data).Error; err != nil {
-			logger.Fatalf("Upsert into db failed, %v", err)
+	for i := 0; i < len(datas); i += batchSize {
+		end := i + batchSize
+		if end > len(datas) {
+			end = len(datas)
+		}
+
+		err := db.Clauses(clause.OnConflict{
+			UpdateAll: true,
+		}).Create(datas[i:end]).Error
+
+		if err != nil {
 			return err
 		}
 	}
+
 	logger.Infof("Upsert into db successed, items %d %s", len(datas), reflect.TypeOf(*new(T)))
 	return nil
 }
@@ -142,28 +155,28 @@ func ProcessUpsert(db *gorm.DB, inscriptions []*model.Inscription, logEvents []*
 	CreateTableIfNotExist(db, model.TokenInfo{}, model.TokenInfo{}.TableName())
 	CreateTableIfNotExist(db, model.TokenActivity{}, model.TokenActivity{}.TableName())
 	CreateTableIfNotExist(db, model.TokenBalance{}, model.TokenBalance{}.TableName())
-
+	var defaultBatchSize = 200
 	tx := db.Begin()
 	if tx.Error != nil {
 		return tx.Error
 	}
 
-	if err := Upsert(tx, inscriptions); err != nil {
+	if err := batchUpsert(tx, inscriptions, defaultBatchSize); err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	if err := Upsert(tx, logEvents); err != nil {
+	if err := batchUpsert(tx, logEvents, defaultBatchSize); err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	if err := Upsert(tx, tokens); err != nil {
+	if err := batchUpsert(tx, tokens, defaultBatchSize); err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	if err := Upsert(tx, tokenActivities); err != nil {
+	if err := batchUpsert(tx, tokenActivities, defaultBatchSize); err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -175,7 +188,7 @@ func ProcessUpsert(db *gorm.DB, inscriptions []*model.Inscription, logEvents []*
 		}
 	}
 
-	if err := Upsert(tx, list); err != nil {
+	if err := batchUpsert(tx, list, defaultBatchSize); err != nil {
 		tx.Rollback()
 		return err
 	}
