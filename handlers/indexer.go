@@ -124,7 +124,7 @@ func ProcessRecords(records []*model.Record) error {
 
 func indexTransaction(trx *model.Transaction) error {
 	if trx.ReceiptStatus != 1 {
-		logger.Warn("transaction invalid at block ", trx.Block, ":", trx.Idx)
+		//logger.Warn("transaction invalid at block ", trx.Block, ":", trx.Idx)
 		return nil
 	}
 	// data:,
