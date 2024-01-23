@@ -563,6 +563,7 @@ func exchangeToken(list *model.List, sendTo string, number uint64, timestamp uin
 	if newHolder {
 		token.Holders++
 	}
+	token.UpdatedAt = timestamp
 
 	// delete list from lists
 	delete(lists, list.InsId)
@@ -620,6 +621,7 @@ func _transferToken(asc20 *model.Asc20) (int8, error) {
 		token.Holders++
 	}
 	token.Trxs++
+	token.UpdatedAt = asc20.Timestamp
 
 	return 1, err
 }

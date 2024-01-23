@@ -354,6 +354,8 @@ func LoadTokenInfo(db *gorm.DB) ([]*model.Token, error) {
 		var completedAt uint64
 		if tokenInfo.CompletedAt == nil {
 			completedAt = 0
+		} else {
+			completedAt = uint64(tokenInfo.CompletedAt.Unix())
 		}
 
 		var num uint64
