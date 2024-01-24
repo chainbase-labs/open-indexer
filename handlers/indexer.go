@@ -641,7 +641,7 @@ func subBalance(owner string, tick string, amount *model.DDecimal, number uint64
 		return false, errors.New("insufficient balance")
 	}
 	fromBalance, ok := fromBalances[token.Tick]
-	logger.Infof("sub balance from %s ,tick %s, amount %s, blockNumber %d", owner, tick, amount.String(), number)
+	logger.Infof("sub balance from %s ,tick %s,frombalance %s, amount %s, blockNumber %d", owner, tick, fromBalance.String(), amount.String(), number)
 	if amount.Cmp(fromBalance) == 1 {
 		return false, errors.New("insufficient balance")
 	}
