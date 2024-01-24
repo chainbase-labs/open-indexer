@@ -268,6 +268,9 @@ func indexLog(log *model.EvmLog) error {
 
 func handleProtocols(inscription *model.Inscription) error {
 	content := strings.TrimSpace(inscription.Content)
+	if len(content) == 0 {
+		return nil
+	}
 	if content[0] == '{' {
 		var protoData map[string]string
 		err := json.Unmarshal([]byte(content), &protoData)
