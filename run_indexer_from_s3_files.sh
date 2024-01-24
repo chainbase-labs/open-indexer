@@ -20,16 +20,15 @@ for FILE in $FILES; do
     S3_FILE_PATH="$S3_BUCKET_PATH$FILE"
     LOCAL_FILE_PATH="$LOCAL_DATA_DIR/transactions.txt"
 
-    echo "s3 file path $S3_FILE_PATH"
     # 拉取数据文件
     aws s3 cp $S3_FILE_PATH $LOCAL_FILE_PATH
 
-    echo "download $File ...."
+    echo "download $S3_FILE_PATH ...."
     if [ -f "$LOCAL_FILE_PATH" ]; then
         sed -i 's/\"//g' $LOCAL_FILE_PATH
 
         echo "index avas ...."
-#        tidb_db_name=$2 tidb_host=$3 tidb_password=$4 tidb_port=$5 tidb_user=$6 ./indexer --transactions $LOCAL_FILE_PATH --logs ./data/logs.txt
+        tidb_db_name=$2 tidb_host=$3 tidb_password=$4 tidb_port=$5 tidb_user=$6 ./indexer --transactions $LOCAL_FILE_PATH --logs ./data/logs.txt
     else
         echo "Failed to download $FILE"
     fi
