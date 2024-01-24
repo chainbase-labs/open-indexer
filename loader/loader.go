@@ -426,15 +426,17 @@ func LoadList(db *gorm.DB) ([]*model.List, error) {
 		return lists, err
 	}
 
-	err = db.Find(&tokenActivities).Error
+	result := db.Raw("SELECT MAX(block_number) FROM token_activities").Scan(&maxBlockNumber)
+	if result.Error != nil {
+		maxBlockNumber = 0
+	}
+
+	err = db.Where("type = ?", "list").Find(&tokenActivities).Error
 	if err != nil {
 		return lists, err
 	}
 
 	for _, activity := range tokenActivities {
-		if activity.BlockNumber > maxBlockNumber {
-			maxBlockNumber = activity.BlockNumber
-		}
 		if activity.Type == "list" {
 			amount, precision, err := model.NewDecimalFromString(activity.Amt.String())
 			if err != nil {
