@@ -370,6 +370,11 @@ func deployToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 	}
 
 	if asc20.Tick == "aval" {
+		max, _, err2 = model.NewDecimalFromString("2100000000000000")
+		if err2 != nil {
+			return -14, nil
+		}
+		asc20.Max = max
 		limit, _, err2 = model.NewDecimalFromString("100000000")
 		if err2 != nil {
 			return -14, nil
