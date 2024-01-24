@@ -20,6 +20,7 @@ for FILE in $FILES; do
     S3_FILE_PATH="$S3_BUCKET_PATH$FILE"
     LOCAL_FILE_PATH="$LOCAL_DATA_DIR/transactions.txt"
 
+    echo "s3 file path $S3_FILE_PATH"
     # 拉取数据文件
     aws s3 cp $S3_FILE_PATH $LOCAL_FILE_PATH
 
