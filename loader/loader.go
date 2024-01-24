@@ -49,7 +49,7 @@ func LoadTransactionData(fname string) ([]*model.Transaction, error) {
 			return nil, err
 		}
 
-		if block < maxBlockNumber {
+		if block <= maxBlockNumber {
 			continue
 		}
 
@@ -280,21 +280,21 @@ func ConvertTokensToTokenInfos(tokens map[string]*model.Token) []*model.TokenInf
 	var tokenInfos []*model.TokenInfo
 	for _, token := range tokens {
 		tokenInfo := &model.TokenInfo{
-			BlockTimestamp: time.Unix(int64(token.CreatedAt), 0),
-			BlockNumber:    token.CreatedBlockNumber,
-			ID:             strconv.FormatUint(token.Number, 10),
-			TxIndex:        token.TxIndex,
-			TxHash:         token.TxHash,
-			Tick:           token.Tick,
-			MaxSupply:      token.Max,
-			Lim:            token.Limit,
-			Wlim:           nil,
-			Dec:            token.Precision,
-			Creator:        token.Creator,
-			Minted:         token.Minted,
-			Holders:        token.Holders,
-			Txs:            token.Trxs,
-			UpdatedAt:      time.Unix(int64(token.UpdatedAt), 0),
+			BlockTimestamp:   time.Unix(int64(token.CreatedAt), 0),
+			BlockNumber:      token.CreatedBlockNumber,
+			ID:               strconv.FormatUint(token.Number, 10),
+			TxIndex:          token.TxIndex,
+			TxHash:           token.TxHash,
+			Tick:             token.Tick,
+			MaxSupply:        token.Max,
+			Lim:              token.Limit,
+			Wlim:             nil,
+			Dec:              token.Precision,
+			Creator:          token.Creator,
+			Minted:           token.Minted,
+			Holders:          token.Holders,
+			Txs:              token.Trxs,
+			UpdatedTimeStamp: time.Unix(int64(token.UpdatedAt), 0),
 		}
 		if token.CompletedAt != 0 {
 			t := time.Unix(int64(token.CompletedAt), 0)
@@ -379,7 +379,7 @@ func LoadTokenInfo(db *gorm.DB) ([]*model.Token, error) {
 			Holders:            tokenInfo.Holders,
 			Trxs:               tokenInfo.Txs,
 			CreatedAt:          uint64(tokenInfo.BlockTimestamp.Unix()),
-			UpdatedAt:          uint64(tokenInfo.UpdatedAt.Unix()),
+			UpdatedAt:          uint64(tokenInfo.UpdatedTimeStamp.Unix()),
 			CompletedAt:        completedAt,
 			Hash:               utils.Keccak256(strings.ToLower(tokenInfo.Tick)),
 			TxHash:             tokenInfo.TxHash,

@@ -272,7 +272,8 @@ func handleProtocols(inscription *model.Inscription) error {
 		var protoData map[string]string
 		err := json.Unmarshal([]byte(content), &protoData)
 		if err != nil {
-			logger.Info("json parse error: ", err, ", at ", inscription.Number)
+			return nil
+			//logger.Info("json parse error: ", err, ", at ", inscription.Number)
 		} else {
 			value, ok := protoData["p"]
 			if ok && strings.TrimSpace(value) != "" {
