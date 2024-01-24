@@ -602,6 +602,7 @@ func _transferToken(asc20 *model.Asc20) (int8, error) {
 		return -36, nil
 	}
 
+	logger.Infof("tx hash %s", asc20.Hash)
 	// From
 	reduceHolder, err := subBalance(asc20.From, tick, asc20.Amount, asc20.Block, asc20.Timestamp)
 	if err != nil {
@@ -640,6 +641,7 @@ func subBalance(owner string, tick string, amount *model.DDecimal, number uint64
 		return false, errors.New("insufficient balance")
 	}
 	fromBalance, ok := fromBalances[token.Tick]
+	logger.Infof("sub balance from %s ,tick %s, amount %s, blockNumber %s")
 	if amount.Cmp(fromBalance) == 1 {
 		return false, errors.New("insufficient balance")
 	}
