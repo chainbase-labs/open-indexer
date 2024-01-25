@@ -9,15 +9,17 @@ import (
 )
 
 var (
-	inputfile1 string
-	inputfile2 string
-	//outputfile string
+	inputfile1  string
+	inputfile2  string
+	rerun       bool
+	rerun_start uint64
 )
 
 func init() {
 	flag.StringVar(&inputfile1, "transactions", "", "the filename of input data, default(./data/transactions.input.txt)")
 	flag.StringVar(&inputfile2, "logs", "", "the filename of input data, default(./data/logs.input.txt)")
-	//flag.StringVar(&outputfile, "output", "", "the filename of output result, default(./data/asc20.output.txt)")
+	flag.BoolVar(&rerun, "rerun", false, "when rerun load token balance from token balance history, default(false)")
+	flag.Uint64Var(&rerun_start, "rerun_start", 0, "when rerun delete token balance history that data > rerun_start")
 
 	flag.Parse()
 
@@ -46,7 +48,7 @@ func main() {
 	}
 	handlers.SetLists(listList)
 
-	tokenBalanceList, err := loader.LoadTokenBalances(db)
+	tokenBalanceList, err := loader.LoadTokenBalances(db, rerun, rerun_start)
 	if err != nil {
 		logger.Fatalf("load token balances failed, %s", err)
 	}

@@ -387,18 +387,21 @@ func LoadTokenInfo(db *gorm.DB) ([]*model.Token, error) {
 	return tokens, nil
 }
 
-func LoadTokenBalances(db *gorm.DB) ([]*model.TokenBalance, error) {
+func LoadTokenBalances(db *gorm.DB, rerun bool, rerun_start uint64) ([]*model.TokenBalance, error) {
 	var tokenBalances []*model.TokenBalance
 
-	exist, err := tidb.JudgeTableExistOrNot(db, model.TokenBalance{}.TableName())
-	if !exist {
-		return tokenBalances, nil
-	}
-	if err != nil {
-		return tokenBalances, err
-	}
+	if rerun {
+		exist, err := tidb.JudgeTableExistOrNot(db, model.TokenBalanceHis{}.TableName())
+		if !exist {
+			return tokenBalances, nil
+		}
+		if err != nil {
+			return tokenBalances, err
+		}
 
-	err = db.Raw(`
+		db.Where("block_number > ?", rerun_start).Delete(&model.TokenBalanceHis{})
+
+		err = db.Raw(`
 WITH RankedTokenBalances AS (
     SELECT *,
            ROW_NUMBER() OVER (PARTITION BY wallet_address, tick ORDER BY block_number DESC) as rn
@@ -408,9 +411,23 @@ SELECT *
 FROM RankedTokenBalances
 WHERE rn = 1
 `).Scan(&tokenBalances).Error
-	if err != nil {
-		return tokenBalances, err
+		if err != nil {
+			return tokenBalances, err
+		}
+	} else {
+		exist, err := tidb.JudgeTableExistOrNot(db, model.TokenBalance{}.TableName())
+		if !exist {
+			return tokenBalances, nil
+		}
+		if err != nil {
+			return tokenBalances, err
+		}
+		err = db.Find(&tokenBalances).Error
+		if err != nil {
+			return tokenBalances, err
+		}
 	}
+
 	for _, tokenBalance := range tokenBalances {
 		if tokenBalance.BlockNumber > maxBlockNumber {
 			maxBlockNumber = tokenBalance.BlockNumber
