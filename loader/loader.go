@@ -443,10 +443,10 @@ func GetMaxBlockNumberFromDB(db *gorm.DB) error {
 	}
 	exist, err = tidb.JudgeTableExistOrNot(db, model.EvmLog{}.TableName())
 	if exist {
-		var maxBlockLogs uint64
+		var maxBlockLogs *uint64
 		db.Raw("SELECT MAX(block_number) FROM evm_logs").Scan(&maxBlockLogs)
-		if maxBlockNumber < maxBlockLogs {
-			maxBlockNumber = maxBlockLogs
+		if maxBlockLogs != nil && maxBlockNumber < *maxBlockLogs {
+			maxBlockNumber = *maxBlockLogs
 		}
 	}
 	return err
