@@ -141,7 +141,7 @@ func LoadLogData(fname string) ([]*model.EvmLog, error) {
 			return nil, fmt.Errorf("invalid data format", len(fields))
 		}
 
-		blockNumber, err := strconv.ParseUint(fields[9], 10, 64)
+		blockNumber, err := strconv.ParseUint(fields[10], 10, 64)
 		if err != nil {
 			return nil, err
 		}
@@ -171,14 +171,13 @@ func LoadLogData(fname string) ([]*model.EvmLog, error) {
 		log.Topic2 = fields[7]
 		log.Topic3 = fields[8]
 
-		log.BlockNumber = blockNumber
-
-		blockTimestamp, err := strconv.ParseUint(fields[10], 10, 64)
+		blockTimestamp, err := strconv.ParseUint(fields[9], 10, 64)
 		if err != nil {
 			return nil, err
 		}
 		log.BlockTimestamp = blockTimestamp
 
+		log.BlockNumber = blockNumber
 		log.BlockHash = fields[11]
 
 		var evmLog = ConvertEvmLogETLToEvmLog(log)
@@ -348,9 +347,6 @@ func LoadTokenInfo(db *gorm.DB) ([]*model.Token, error) {
 	}
 
 	for _, tokenInfo := range tokenInfos {
-		if tokenInfo.BlockNumber > maxBlockNumber {
-			maxBlockNumber = tokenInfo.BlockNumber
-		}
 		var completedAt uint64
 		if tokenInfo.CompletedAt == nil {
 			completedAt = 0
@@ -402,7 +398,16 @@ func LoadTokenBalances(db *gorm.DB) ([]*model.TokenBalance, error) {
 		return tokenBalances, err
 	}
 
-	err = db.Find(&tokenBalances).Error
+	err = db.Raw(`
+WITH RankedTokenBalances AS (
+    SELECT *,
+           ROW_NUMBER() OVER (PARTITION BY wallet_address, tick ORDER BY block_number DESC) as rn
+    FROM token_balances_his
+)
+SELECT * 
+FROM RankedTokenBalances
+WHERE rn = 1
+`).Scan(&tokenBalances).Error
 	if err != nil {
 		return tokenBalances, err
 	}
@@ -412,6 +417,22 @@ func LoadTokenBalances(db *gorm.DB) ([]*model.TokenBalance, error) {
 		}
 	}
 	return tokenBalances, nil
+}
+
+func GetMaxBlockNumberFromDB(db *gorm.DB) error {
+	exist, err := tidb.JudgeTableExistOrNot(db, model.Inscription{}.TableName())
+	if exist {
+		db.Raw("SELECT MAX(block) FROM inscriptions").Scan(&maxBlockNumber)
+	}
+	exist, err = tidb.JudgeTableExistOrNot(db, model.EvmLog{}.TableName())
+	if exist {
+		var maxBlockLogs uint64
+		db.Raw("SELECT MAX(block_number) FROM evm_logs").Scan(&maxBlockLogs)
+		if maxBlockNumber < maxBlockLogs {
+			maxBlockNumber = maxBlockLogs
+		}
+	}
+	return err
 }
 
 func LoadList(db *gorm.DB) ([]*model.List, error) {
@@ -424,11 +445,6 @@ func LoadList(db *gorm.DB) ([]*model.List, error) {
 	}
 	if err != nil {
 		return lists, err
-	}
-
-	result := db.Raw("SELECT MAX(block_number) FROM token_activities").Scan(&maxBlockNumber)
-	if result.Error != nil {
-		maxBlockNumber = 0
 	}
 
 	err = db.Where("type = ?", "list").Find(&tokenActivities).Error

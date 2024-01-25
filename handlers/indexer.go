@@ -647,15 +647,19 @@ func subBalance(owner string, tick string, amount *model.DDecimal, number uint64
 	if !exists {
 		return false, errors.New("token not found")
 	}
+
 	fromBalances, ok := userBalances[owner]
 	if !ok {
+		logger.Infof("Sub balance user: %s doesn't own any token", owner)
 		return false, errors.New("insufficient balance")
 	}
 	fromBalance, ok := fromBalances[token.Tick]
 	if !ok {
+		logger.Infof("Sub balance user: %s doesn't own tick: %s", owner, tick)
 		return false, errors.New("insufficient balance")
 	}
 	if amount.Cmp(fromBalance) == 1 {
+		logger.Infof("Sub balance user: %s tick : %s not enough. balance: %s, sub amount: %s", owner, tick, fromBalance.String(), amount.String())
 		return false, errors.New("insufficient balance")
 	}
 

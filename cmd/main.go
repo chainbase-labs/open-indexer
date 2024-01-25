@@ -56,6 +56,10 @@ func main() {
 		logger.Fatalf("set token balances failed, %s", err)
 	}
 
+	err = loader.GetMaxBlockNumberFromDB(db)
+	if err != nil {
+		logger.Fatalf("get max block number from db failed %s", err)
+	}
 	trxs, err := loader.LoadTransactionData(inputfile1)
 	if err != nil {
 		logger.Fatalf("invalid input, %s", err)
