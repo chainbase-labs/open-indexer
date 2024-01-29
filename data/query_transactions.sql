@@ -7,7 +7,7 @@ select
     value,
     gas,
     gas_price,
-    input,
+    from_utf8(input),
     receipt_cumulative_gas_used,
     receipt_gas_used,
     receipt_contract_address,
