@@ -8,7 +8,7 @@ import (
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 	"log"
-	"open-indexer/handlers"
+	logger2 "open-indexer/logger"
 	"open-indexer/model"
 	"os"
 	"reflect"
@@ -130,7 +130,7 @@ func batchUpsert[T any](db *gorm.DB, datas []T, batchSize int, table_name string
 		return nil
 	}
 
-	var logger = handlers.GetLogger()
+	var logger = logger2.GetLogger()
 	for i := 0; i < len(datas); i += batchSize {
 		end := i + batchSize
 		if end > len(datas) {

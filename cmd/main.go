@@ -6,6 +6,7 @@ import (
 	"open-indexer/connector/tidb"
 	"open-indexer/handlers"
 	"open-indexer/loader"
+	"open-indexer/logger"
 	"time"
 )
 
@@ -31,39 +32,13 @@ func init() {
 
 func main() {
 
-	var logger = handlers.GetLogger()
+	var logger = logger.GetLogger()
 
 	logger.Info("start index")
 
 	db, err := tidb.GetDBInstanceByEnv()
 
 	start := time.Now()
-	tokenList, err := loader.LoadTokenInfo(db)
-	if err != nil {
-		logger.Fatalf("load token info failed, %s", err)
-	}
-	handlers.SetTokens(tokenList)
-
-	listList, err := loader.LoadList(db)
-	if err != nil {
-		logger.Fatalf("load token info failed, %s", err)
-	}
-	handlers.SetLists(listList)
-
-	tokenBalanceList, err := loader.LoadTokenBalances(db, rerun, rerun_start)
-	if err != nil {
-		logger.Fatalf("load token balances failed, %s", err)
-	}
-
-	err = handlers.SetTokenBalances(tokenBalanceList)
-	if err != nil {
-		logger.Fatalf("set token balances failed, %s", err)
-	}
-
-	duration := time.Since(start)
-	logger.Infof("Load Data from db took: %v ms", duration.Milliseconds())
-
-	start = time.Now()
 	err = loader.GetMaxBlockNumberFromDB(db)
 	if err != nil {
 		logger.Fatalf("get max block number from db failed %s", err)
@@ -78,7 +53,7 @@ func main() {
 		logger.Fatalf("invalid input, %s", err)
 	}
 
-	duration = time.Since(start)
+	duration := time.Since(start)
 	logger.Infof("Load Data from files took: %v ms", duration.Milliseconds())
 
 	start = time.Now()

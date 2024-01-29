@@ -4,6 +4,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"gorm.io/gorm"
+	"open-indexer/connector/tidb"
+	"open-indexer/loader"
+	"open-indexer/logger"
 	"open-indexer/model"
 	"open-indexer/utils"
 	"sort"
@@ -22,7 +26,11 @@ var tokensByHash = make(map[string]*model.Token)
 var lists = make(map[string]*model.List)
 var tokenBalances = make(map[string]map[string]*model.TokenBalance)
 var inscriptionNumber uint64 = 0
+var db *gorm.DB
 
+func init() {
+	db, _ = tidb.GetDBInstanceByEnv()
+}
 func GetInfo() (map[string]*model.Token, map[string]map[string]*model.DDecimal, map[string]map[string]*model.DDecimal) {
 	return tokens, userBalances, tokenHolders
 }
@@ -45,30 +53,6 @@ func GetInscriptions() []*model.Inscription {
 
 func GetLogEvents() []*model.EvmLog {
 	return logEvents
-}
-
-func SetTokens(tokeninfos []*model.Token) {
-	for _, token := range tokeninfos {
-		tokens[strings.ToLower(token.Tick)] = token
-		tokenHolders[strings.ToLower(token.Tick)] = make(map[string]*model.DDecimal)
-		tokensByHash[token.Hash] = token
-	}
-}
-
-func SetLists(listList []*model.List) {
-	for _, list := range listList {
-		lists[list.InsId] = list
-	}
-}
-
-func SetTokenBalances(tokenBalances []*model.TokenBalance) error {
-	for _, balance := range tokenBalances {
-		_, err := addBalance(balance.WalletAddress, balance.Tick, balance.Amount, balance.BlockNumber, uint64(balance.BlockTimestamp.Unix()))
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func MixRecords(trxs []*model.Transaction, logs []*model.EvmLog) []*model.Record {
@@ -107,7 +91,7 @@ func MixRecords(trxs []*model.Transaction, logs []*model.EvmLog) []*model.Record
 }
 
 func ProcessRecords(records []*model.Record) error {
-	logger.Println("records", len(records))
+	logger.Logger.Println("records", len(records))
 	var err error
 	for _, record := range records {
 		if record.IsLog {
@@ -133,7 +117,7 @@ func indexTransaction(trx *model.Transaction) error {
 	}
 	bytes, err := hex.DecodeString(trx.Input[2:])
 	if err != nil {
-		logger.Warn("inscribe err", err, " at block ", trx.Block, ":", trx.Idx)
+		logger.Logger.Warn("inscribe err", err, " at block ", trx.Block, ":", trx.Idx)
 		return nil
 	}
 	input := string(bytes)
@@ -163,7 +147,7 @@ func indexTransaction(trx *model.Transaction) error {
 
 	if trx.To != "" {
 		if err := handleProtocols(&inscription); err != nil {
-			logger.Info("error at ", inscription.Number)
+			logger.Logger.Info("error at ", inscription.Number)
 			return err
 		}
 	}
@@ -220,13 +204,13 @@ func indexLog(log *model.EvmLog) error {
 			}
 		} else {
 			asc20.Valid = -52
-			logger.Warningln("failed to validate transfer from:", asc20.From, "address:", log.Address)
+			logger.Logger.Warningln("failed to validate transfer from:", asc20.From, "address:", log.Address)
 		}
 	} else {
 		// exchange
 		asc20.Operation = "exchange"
 
-		list, ok := lists[log.Data]
+		list, ok := getListFromDB(log.Data)
 		if ok {
 			if list.Owner == asc20.From && list.Exchange == log.Address {
 				asc20.Tick = list.Tick
@@ -245,16 +229,16 @@ func indexLog(log *model.EvmLog) error {
 			} else {
 				if list.Owner != asc20.From {
 					asc20.Valid = -54
-					logger.Warningln("failed to validate transfer from:", asc20.From, list.Owner)
+					logger.Logger.Warningln("failed to validate transfer from:", asc20.From, list.Owner)
 				} else {
 					asc20.Valid = -55
-					logger.Warningln("failed to validate exchange:", log.Address, list.Exchange)
+					logger.Logger.Warningln("failed to validate exchange:", log.Address, list.Exchange)
 				}
 			}
 
 		} else {
 			asc20.Valid = -53
-			logger.Warningln("failed to transfer, list not found, id:", log.Data)
+			logger.Logger.Warningln("failed to transfer, list not found, id:", log.Data)
 		}
 	}
 
@@ -363,9 +347,9 @@ func deployToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 
 	// 已经 deploy
 	asc20.Tick = strings.TrimSpace(asc20.Tick) // trim tick
-	_, exists := tokens[strings.ToLower(asc20.Tick)]
+	_, exists := getTokenFromDB(strings.ToLower(asc20.Tick))
 	if exists {
-		logger.Info("token ", asc20.Tick, " has deployed at ", asc20.Number)
+		//logger.Logger.Info("token ", asc20.Tick, " has deployed at ", asc20.Number)
 		return -17, nil
 	}
 
@@ -421,7 +405,7 @@ func mintToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 
 	// check token
 	tick := strings.ToLower(asc20.Tick)
-	token, exists := tokens[tick]
+	token, exists := getTokenFromDB(tick)
 	if !exists {
 		return -23, nil
 	}
@@ -508,7 +492,7 @@ func listToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 
 	// check token
 	tick := strings.ToLower(asc20.Tick)
-	token, exists := tokens[tick]
+	token, exists := getTokenFromDB(tick)
 	if !exists {
 		return -33, nil
 	}
@@ -569,7 +553,7 @@ func exchangeToken(list *model.List, sendTo string, number uint64, timestamp uin
 
 	// update token
 	tick := strings.ToLower(list.Tick)
-	token, exists := tokens[tick]
+	token, exists := getTokenFromDB(tick)
 	if !exists {
 		return -33, nil
 	}
@@ -583,7 +567,7 @@ func exchangeToken(list *model.List, sendTo string, number uint64, timestamp uin
 
 	// delete list from lists
 	delete(lists, list.InsId)
-	logger.Println("exchange", list.Amount)
+	logger.Logger.Println("exchange", list.Amount)
 	return 1, err
 }
 
@@ -591,7 +575,7 @@ func _transferToken(asc20 *model.Asc20) (int8, error) {
 
 	// check token
 	tick := strings.ToLower(asc20.Tick)
-	token, exists := tokens[tick]
+	token, exists := getTokenFromDB(tick)
 	if !exists {
 		return -33, nil
 	}
@@ -643,23 +627,25 @@ func _transferToken(asc20 *model.Asc20) (int8, error) {
 }
 
 func subBalance(owner string, tick string, amount *model.DDecimal, number uint64, timestamp uint64) (bool, error) {
-	token, exists := tokens[strings.ToLower(tick)]
+	token, exists := getTokenFromDB(strings.ToLower(tick))
 	if !exists {
 		return false, errors.New("token not found")
 	}
 
+	getTokenBalanceFromDB(owner, tick)
+
 	fromBalances, ok := userBalances[owner]
 	if !ok {
-		logger.Infof("Sub balance user: %s doesn't own any token", owner)
+		logger.Logger.Infof("Sub balance user: %s doesn't own any token", owner)
 		return false, errors.New("insufficient balance")
 	}
 	fromBalance, ok := fromBalances[token.Tick]
 	if !ok {
-		logger.Infof("Sub balance user: %s doesn't own tick: %s", owner, tick)
+		logger.Logger.Infof("Sub balance user: %s doesn't own tick: %s", owner, tick)
 		return false, errors.New("insufficient balance")
 	}
 	if amount.Cmp(fromBalance) == 1 {
-		logger.Infof("Sub balance user: %s tick : %s not enough. balance: %s, sub amount: %s", owner, tick, fromBalance.String(), amount.String())
+		logger.Logger.Infof("Sub balance user: %s tick : %s not enough. balance: %s, sub amount: %s", owner, tick, fromBalance.String(), amount.String())
 		return false, errors.New("insufficient balance")
 	}
 
@@ -701,10 +687,13 @@ func subBalance(owner string, tick string, amount *model.DDecimal, number uint64
 }
 
 func addBalance(owner string, tick string, amount *model.DDecimal, number uint64, timestamp uint64) (bool, error) {
-	token, exists := tokens[strings.ToLower(tick)]
+	token, exists := getTokenFromDB(strings.ToLower(tick))
 	if !exists {
 		return false, errors.New("token not found")
 	}
+
+	getTokenBalanceFromDB(owner, tick)
+
 	toBalances, ok := userBalances[owner]
 	if !ok {
 		toBalances = make(map[string]*model.DDecimal)
@@ -750,4 +739,86 @@ func addBalance(owner string, tick string, amount *model.DDecimal, number uint64
 	}
 
 	return newHolder, nil
+}
+
+/**
+------------ load data from db ---------------
+*/
+
+func getTokenBalanceFromDB(owner string, tick string) {
+	balances, ok := userBalances[owner]
+	if ok {
+		_, ok := balances[tick]
+		if ok {
+			return
+		}
+	}
+
+	var balance *model.TokenBalance
+	res := db.Where("wallet_address=? and tick=?", owner, tick).Find(&balance)
+	if res.RowsAffected == 0 {
+		logger.Logger.Infof("User: %s doesn't own tick: %s in db", owner, tick)
+		return
+	}
+
+	toBalances, ok := userBalances[owner]
+	if !ok {
+		toBalances = make(map[string]*model.DDecimal)
+		userBalances[owner] = toBalances
+	}
+	toBalance, ok := toBalances[tick]
+	if !ok {
+		toBalance = model.NewDecimal()
+	}
+
+	toBalance = toBalance.Add(balance.Amount)
+
+	// save
+	toBalances[tick] = toBalance
+	tokenHolders[tick][owner] = toBalance
+
+	tickHolders, ok := tokenBalances[tick]
+	if !ok {
+		tickHolders = make(map[string]*model.TokenBalance)
+		tokenBalances[tick] = tickHolders
+	}
+
+	_, ok = tickHolders[owner]
+	if !ok {
+		tickHolders[owner] = balance
+	}
+}
+
+func getTokenFromDB(tick string) (*model.Token, bool) {
+	tick = strings.ToLower(tick)
+	token, exists := tokens[tick]
+	if exists {
+		return token, exists
+	}
+	var tokenInfo *model.TokenInfo
+	res := db.Where("tick=?", tick).Find(&tokenInfo)
+	if res.RowsAffected == 0 {
+		logger.Logger.Infof("Tick %s not exist in db", tick)
+		return nil, false
+	}
+	token, _ = loader.ConvertTokenInfoToToken(tokenInfo)
+	tokens[tick] = token
+	return token, true
+}
+
+func getListFromDB(id string) (*model.List, bool) {
+	list, exists := lists[id]
+	if exists {
+		return list, exists
+	}
+
+	var activity *model.TokenActivity
+	res := db.Where("type=? and tx_hash=?", "list", id).Find(&activity)
+	if res.RowsAffected == 0 {
+		logger.Logger.Infof("List %s not exist in db", id)
+		return nil, false
+	}
+	list, _ = loader.ConvertTokenActivityToList(activity)
+	lists[id] = list
+	return list, true
 }

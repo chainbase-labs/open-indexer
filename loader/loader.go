@@ -347,44 +347,50 @@ func LoadTokenInfo(db *gorm.DB) ([]*model.Token, error) {
 	}
 
 	for _, tokenInfo := range tokenInfos {
-		var completedAt uint64
-		if tokenInfo.CompletedAt == nil {
-			completedAt = 0
-		} else {
-			completedAt = uint64(tokenInfo.CompletedAt.Unix())
-		}
-
-		var num uint64
-
-		if tokenInfo.ID != "" {
-			num, err = strconv.ParseUint(tokenInfo.ID, 10, 64)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		token := &model.Token{
-			Tick:               tokenInfo.Tick,
-			Number:             num,
-			CreatedBlockNumber: tokenInfo.BlockNumber,
-			Precision:          tokenInfo.Dec,
-			Max:                tokenInfo.MaxSupply,
-			Limit:              tokenInfo.Lim,
-			Minted:             tokenInfo.Minted,
-			Progress:           0,
-			Holders:            tokenInfo.Holders,
-			Trxs:               tokenInfo.Txs,
-			CreatedAt:          uint64(tokenInfo.BlockTimestamp.Unix()),
-			UpdatedAt:          uint64(tokenInfo.UpdatedTimeStamp.Unix()),
-			CompletedAt:        completedAt,
-			Hash:               utils.Keccak256(strings.ToLower(tokenInfo.Tick)),
-			TxHash:             tokenInfo.TxHash,
-			TxIndex:            tokenInfo.TxIndex,
-			Creator:            tokenInfo.Creator,
-		}
+		token, _ := ConvertTokenInfoToToken(tokenInfo)
 		tokens = append(tokens, token)
 	}
 	return tokens, nil
+}
+
+func ConvertTokenInfoToToken(tokenInfo *model.TokenInfo) (*model.Token, error) {
+	var completedAt uint64
+	if tokenInfo.CompletedAt == nil {
+		completedAt = 0
+	} else {
+		completedAt = uint64(tokenInfo.CompletedAt.Unix())
+	}
+
+	var num uint64
+
+	if tokenInfo.ID != "" {
+		var err error
+		num, err = strconv.ParseUint(tokenInfo.ID, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	token := &model.Token{
+		Tick:               tokenInfo.Tick,
+		Number:             num,
+		CreatedBlockNumber: tokenInfo.BlockNumber,
+		Precision:          tokenInfo.Dec,
+		Max:                tokenInfo.MaxSupply,
+		Limit:              tokenInfo.Lim,
+		Minted:             tokenInfo.Minted,
+		Progress:           0,
+		Holders:            tokenInfo.Holders,
+		Trxs:               tokenInfo.Txs,
+		CreatedAt:          uint64(tokenInfo.BlockTimestamp.Unix()),
+		UpdatedAt:          uint64(tokenInfo.UpdatedTimeStamp.Unix()),
+		CompletedAt:        completedAt,
+		Hash:               utils.Keccak256(strings.ToLower(tokenInfo.Tick)),
+		TxHash:             tokenInfo.TxHash,
+		TxIndex:            tokenInfo.TxIndex,
+		Creator:            tokenInfo.Creator,
+	}
+	return token, nil
 }
 
 func LoadTokenBalances(db *gorm.DB, rerun bool, rerun_start uint64) ([]*model.TokenBalance, error) {
@@ -471,21 +477,26 @@ func LoadList(db *gorm.DB) ([]*model.List, error) {
 
 	for _, activity := range tokenActivities {
 		if activity.Type == "list" {
-			amount, precision, err := model.NewDecimalFromString(activity.Amt.String())
-			if err != nil {
-				return nil, fmt.Errorf("error converting Amt to *DDecimal: %v", err)
-			}
-
-			list := &model.List{
-				InsId:     activity.TxHash,
-				Owner:     activity.FromAddress,
-				Exchange:  activity.ToAddress,
-				Tick:      activity.Tick,
-				Amount:    amount,
-				Precision: precision,
-			}
+			list, _ := ConvertTokenActivityToList(activity)
 			lists = append(lists, list)
 		}
 	}
 	return lists, nil
+}
+
+func ConvertTokenActivityToList(activity *model.TokenActivity) (*model.List, error) {
+	amount, precision, err := model.NewDecimalFromString(activity.Amt.String())
+	if err != nil {
+		return nil, fmt.Errorf("error converting Amt to *DDecimal: %v", err)
+	}
+
+	list := &model.List{
+		InsId:     activity.TxHash,
+		Owner:     activity.FromAddress,
+		Exchange:  activity.ToAddress,
+		Tick:      activity.Tick,
+		Amount:    amount,
+		Precision: precision,
+	}
+	return list, nil
 }

@@ -1,4 +1,4 @@
-package handlers
+package logger
 
 import (
 	"github.com/sirupsen/logrus"
@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-var logger *logrus.Logger
+var Logger *logrus.Logger
 
 func init() {
 
@@ -21,12 +21,12 @@ func initLogger() {
 		logrus.Fatalf("create file go_program_logs.txt failed: %v", err)
 	}
 
-	logger = logrus.New()
-	logger.SetLevel(logrus.InfoLevel)
-	logger.SetFormatter(&logrus.TextFormatter{})
-	logger.SetOutput(io.MultiWriter(writerStd, writerFile))
+	Logger = logrus.New()
+	Logger.SetLevel(logrus.InfoLevel)
+	Logger.SetFormatter(&logrus.TextFormatter{})
+	Logger.SetOutput(io.MultiWriter(writerStd, writerFile))
 }
 
 func GetLogger() *logrus.Logger {
-	return logger
+	return Logger
 }
