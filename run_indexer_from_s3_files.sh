@@ -25,8 +25,11 @@ for FILE in $FILES; do
     LOCAL_LOG_FILE_PATH="$LOCAL_DATA_DIR/logs.txt"
     if [ -f "$LOCAL_TRANSACTION_FILE_PATH" ]; then
       rm "$LOCAL_TRANSACTION_FILE_PATH"
+    fi
+
     if [ -f "$LOCAL_LOG_FILE_PATH" ]; then
       rm "$LOCAL_LOG_FILE_PATH"
+    fi
     # 拉取数据文件
     aws s3 cp $S3_TRANSACTION_FILE_PATH $LOCAL_TRANSACTION_FILE_PATH
     if aws s3 ls $S3_LOGS_FILE_PATH; then
