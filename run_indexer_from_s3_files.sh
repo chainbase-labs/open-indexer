@@ -20,9 +20,13 @@ for FILE in $FILES; do
     # 构建 S3 文件路径和本地文件路径
     S3_TRANSACTION_FILE_PATH="$S3_BUCKET_PATH/transactions/$FILE"
     S3_LOGS_FILE_PATH="$S3_BUCKET_PATH/logs/$FILE"
+
     LOCAL_TRANSACTION_FILE_PATH="$LOCAL_DATA_DIR/transactions.txt"
     LOCAL_LOG_FILE_PATH="$LOCAL_DATA_DIR/logs.txt"
-
+    if [ -f "$LOCAL_TRANSACTION_FILE_PATH" ]; then
+      rm "$LOCAL_TRANSACTION_FILE_PATH"
+    if [ -f "$LOCAL_LOG_FILE_PATH" ]; then
+      rm "$LOCAL_LOG_FILE_PATH"
     # 拉取数据文件
     aws s3 cp $S3_TRANSACTION_FILE_PATH $LOCAL_TRANSACTION_FILE_PATH
     if aws s3 ls $S3_LOGS_FILE_PATH; then
@@ -41,9 +45,6 @@ for FILE in $FILES; do
     else
         echo "Failed to download $FILE"
     fi
-
-    rm $LOCAL_TRANSACTION_FILE_PATH
-    rm $LOCAL_LOG_FILE_PATH
 done
 
 echo "All files processed."
