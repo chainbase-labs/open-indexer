@@ -59,7 +59,7 @@ func createDB(tidb_user string, tidb_password string, tidb_host string, tidb_por
 		tidb_user, tidb_password, tidb_host, tidb_port, tidb_db_name)
 
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: logger.Default.LogMode(logger.Error),
 	})
 
 	if err != nil {

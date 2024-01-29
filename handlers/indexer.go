@@ -813,11 +813,21 @@ func getTokenFromDB(tick string) (*model.Token, bool) {
 		return token, exists
 	}
 	var tokenInfo *model.TokenInfo
-	res := db.Where("tick=?", tick).Find(&tokenInfo)
-	if res.RowsAffected == 0 {
-		logger.Logger.Infof("Tick %s not exist in db", tick)
-		return nil, false
+	if rerun {
+		res := db.Table("token_info_his").Where("block_number <= ? and tick = ?", rerun_start, tick).Order("block_number desc").Limit(1).Scan(&tokenInfo)
+		db.Where("block_number > ? and tick = ?", rerun_start, tick).Delete(model.TokenInfoHis{})
+		if res.RowsAffected == 0 {
+			logger.Logger.Infof("Tick %s not exist in db at %d", tick, rerun_start)
+			return nil, false
+		}
+	} else {
+		res := db.Where("tick=?", tick).Find(&tokenInfo)
+		if res.RowsAffected == 0 {
+			logger.Logger.Infof("Tick %s not exist in db", tick)
+			return nil, false
+		}
 	}
+
 	token, _ = loader.ConvertTokenInfoToToken(tokenInfo)
 	tokens[tick] = token
 	tokenHolders[tick] = make(map[string]*model.DDecimal)
