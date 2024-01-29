@@ -218,7 +218,7 @@ func indexLog(log *model.EvmLog) error {
 		// exchange
 		asc20.Operation = "exchange"
 
-		list, ok := getListFromDB(log.Data)
+		list, ok := getListFromDB(log.Data, log.Block)
 		if ok {
 			if list.Owner == asc20.From && list.Exchange == log.Address {
 				asc20.Tick = list.Tick
@@ -355,7 +355,7 @@ func deployToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 
 	// 已经 deploy
 	asc20.Tick = strings.TrimSpace(asc20.Tick) // trim tick
-	_, exists := getTokenFromDB(strings.ToLower(asc20.Tick))
+	_, exists := getTokenFromDB(strings.ToLower(asc20.Tick), asc20.Block)
 	if exists {
 		//logger.Logger.Info("token ", asc20.Tick, " has deployed at ", asc20.Number)
 		return -17, nil
@@ -413,7 +413,7 @@ func mintToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 
 	// check token
 	tick := strings.ToLower(asc20.Tick)
-	token, exists := getTokenFromDB(tick)
+	token, exists := getTokenFromDB(tick, asc20.Block)
 	if !exists {
 		return -23, nil
 	}
@@ -500,7 +500,7 @@ func listToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 
 	// check token
 	tick := strings.ToLower(asc20.Tick)
-	token, exists := getTokenFromDB(tick)
+	token, exists := getTokenFromDB(tick, asc20.Block)
 	if !exists {
 		return -33, nil
 	}
@@ -561,7 +561,7 @@ func exchangeToken(list *model.List, sendTo string, number uint64, timestamp uin
 
 	// update token
 	tick := strings.ToLower(list.Tick)
-	token, exists := getTokenFromDB(tick)
+	token, exists := getTokenFromDB(tick, number)
 	if !exists {
 		return -33, nil
 	}
@@ -583,7 +583,7 @@ func _transferToken(asc20 *model.Asc20) (int8, error) {
 
 	// check token
 	tick := strings.ToLower(asc20.Tick)
-	token, exists := getTokenFromDB(tick)
+	token, exists := getTokenFromDB(tick, asc20.Block)
 	if !exists {
 		return -33, nil
 	}
@@ -635,7 +635,7 @@ func _transferToken(asc20 *model.Asc20) (int8, error) {
 }
 
 func subBalance(owner string, tick string, amount *model.DDecimal, number uint64, timestamp uint64) (bool, error) {
-	token, exists := getTokenFromDB(strings.ToLower(tick))
+	token, exists := getTokenFromDB(strings.ToLower(tick), number)
 	if !exists {
 		return false, errors.New("sub balance token " + tick + " not found at " + strconv.FormatUint(number, 10))
 	}
@@ -695,7 +695,7 @@ func subBalance(owner string, tick string, amount *model.DDecimal, number uint64
 }
 
 func addBalance(owner string, tick string, amount *model.DDecimal, number uint64, timestamp uint64) (bool, error) {
-	token, exists := getTokenFromDB(strings.ToLower(tick))
+	token, exists := getTokenFromDB(strings.ToLower(tick), number)
 	if !exists {
 		return false, errors.New("add balance token " + tick + " not found at " + strconv.FormatUint(number, 10))
 	}
@@ -806,7 +806,7 @@ func getTokenBalanceFromDB(owner string, tick string) {
 	}
 }
 
-func getTokenFromDB(tick string) (*model.Token, bool) {
+func getTokenFromDB(tick string, block_number uint64) (*model.Token, bool) {
 	tick = strings.ToLower(tick)
 	token, exists := tokens[tick]
 	if exists {
@@ -823,7 +823,7 @@ func getTokenFromDB(tick string) (*model.Token, bool) {
 	} else {
 		res := db.Where("tick=?", tick).Find(&tokenInfo)
 		if res.RowsAffected == 0 {
-			logger.Logger.Infof("Tick %s not exist in db", tick)
+			logger.Logger.Infof("Tick %s not exist in db at %d", tick, block_number)
 			return nil, false
 		}
 	}
@@ -835,7 +835,7 @@ func getTokenFromDB(tick string) (*model.Token, bool) {
 	return token, true
 }
 
-func getListFromDB(id string) (*model.List, bool) {
+func getListFromDB(id string, block_number uint64) (*model.List, bool) {
 	list, exists := lists[id]
 	if exists {
 		return list, exists
@@ -844,7 +844,7 @@ func getListFromDB(id string) (*model.List, bool) {
 	var activity *model.TokenActivity
 	res := db.Where("type=? and tx_hash=?", "list", id).Find(&activity)
 	if res.RowsAffected == 0 {
-		logger.Logger.Infof("List %s not exist in db", id)
+		logger.Logger.Infof("List %s not exist in db at %d", id, block_number)
 		return nil, false
 	}
 	list, _ = loader.ConvertTokenActivityToList(activity)
