@@ -50,8 +50,8 @@ from
             from
                 avalanche.transactions
             where
-                block_number > 39206439
-              and block_number <= 39256439
+                block_number >= 38780167
+              and block_number <= 38790167
         ) a
             join (
             select
@@ -59,8 +59,8 @@ from
             from
                 avas.raw
             where
-                block_number > 39206439
-              and block_number <= 39256439
+                block_number >= 38780167
+              and block_number <= 38790167
               and tick = 'dino'
         ) b on a.hash = b.tx_hash
-        );
+        )order by block_number;
