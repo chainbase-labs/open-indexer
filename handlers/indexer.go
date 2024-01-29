@@ -28,9 +28,16 @@ var lists = make(map[string]*model.List)
 var tokenBalances = make(map[string]map[string]*model.TokenBalance)
 var inscriptionNumber uint64 = 0
 var db *gorm.DB
+var rerun = false
+var rerun_start uint64 = 0
 
 func init() {
 	db, _ = tidb.GetDBInstanceByEnv()
+}
+
+func SetRerun(rerun_block uint64) {
+	rerun = true
+	rerun_start = rerun_block
 }
 func GetInfo() (map[string]*model.Token, map[string]map[string]*model.DDecimal, map[string]map[string]*model.DDecimal) {
 	return tokens, userBalances, tokenHolders
@@ -754,12 +761,21 @@ func getTokenBalanceFromDB(owner string, tick string) {
 			return
 		}
 	}
-
 	var balance *model.TokenBalance
-	res := db.Where("wallet_address=? and tick=?", owner, tick).Find(&balance)
-	if res.RowsAffected == 0 {
-		logger.Logger.Infof("User: %s doesn't own tick: %s in db", owner, tick)
-		return
+
+	if rerun {
+		res := db.Table("token_balances_his").Where("block_number<=? and wallet_address=? and tick=?", rerun_start, owner, tick).Order("block_number desc").Limit(1).Scan(&balance)
+		db.Where("block_number>? and wallet_address=? and tick=?", rerun_start, owner, tick).Delete(model.TokenBalanceHis{})
+		if res.RowsAffected == 0 {
+			logger.Logger.Infof("User: %s doesn't own tick: %s in db at %d", owner, tick, rerun_start)
+			return
+		}
+	} else {
+		res := db.Where("wallet_address=? and tick=?", owner, tick).Find(&balance)
+		if res.RowsAffected == 0 {
+			logger.Logger.Infof("User: %s doesn't own tick: %s in db", owner, tick)
+			return
+		}
 	}
 
 	toBalances, ok := userBalances[owner]

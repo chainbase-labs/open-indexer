@@ -442,6 +442,10 @@ WHERE rn = 1
 	return tokenBalances, nil
 }
 
+func SetMaxBlockNumber(max uint64) {
+	maxBlockNumber = max
+}
+
 func GetMaxBlockNumberFromDB(db *gorm.DB) error {
 	exist, err := tidb.JudgeTableExistOrNot(db, model.Inscription{}.TableName())
 	if exist {

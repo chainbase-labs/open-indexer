@@ -39,7 +39,12 @@ func main() {
 	db, err := tidb.GetDBInstanceByEnv()
 
 	start := time.Now()
-	err = loader.GetMaxBlockNumberFromDB(db)
+	if rerun {
+		loader.SetMaxBlockNumber(rerun_start)
+		handlers.SetRerun(rerun_start)
+	} else {
+		err = loader.GetMaxBlockNumberFromDB(db)
+	}
 	if err != nil {
 		logger.Fatalf("get max block number from db failed %s", err)
 	}
