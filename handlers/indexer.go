@@ -630,7 +630,7 @@ func _transferToken(asc20 *model.Asc20) (int8, error) {
 func subBalance(owner string, tick string, amount *model.DDecimal, number uint64, timestamp uint64) (bool, error) {
 	token, exists := getTokenFromDB(strings.ToLower(tick))
 	if !exists {
-		return false, errors.New("sub balance token " + tick + " not found at " + strconv.FormatUint(number, 64))
+		return false, errors.New("sub balance token " + tick + " not found at " + strconv.FormatUint(number, 10))
 	}
 
 	getTokenBalanceFromDB(owner, tick)
@@ -690,7 +690,7 @@ func subBalance(owner string, tick string, amount *model.DDecimal, number uint64
 func addBalance(owner string, tick string, amount *model.DDecimal, number uint64, timestamp uint64) (bool, error) {
 	token, exists := getTokenFromDB(strings.ToLower(tick))
 	if !exists {
-		return false, errors.New("add balance token " + tick + " not found at " + strconv.FormatUint(number, 64))
+		return false, errors.New("add balance token " + tick + " not found at " + strconv.FormatUint(number, 10))
 	}
 
 	getTokenBalanceFromDB(owner, tick)
