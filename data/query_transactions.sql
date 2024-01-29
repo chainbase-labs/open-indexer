@@ -7,7 +7,7 @@ select
     value,
     gas,
     gas_price,
-    from_utf8(input),
+    concat('0x',lower(to_hex(input))),
     receipt_cumulative_gas_used,
     receipt_gas_used,
     receipt_contract_address,
