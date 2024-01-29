@@ -23,14 +23,14 @@ for FILE in $FILES; do
     LOCAL_TRANSACTION_FILE_PATH="$LOCAL_DATA_DIR/transactions.txt"
     LOCAL_LOG_FILE_PATH="$LOCAL_DATA_DIR/logs.txt"
 
-    echo $S3_TRANSACTION_FILE_PATH
-    echo $S3_LOGS_FILE_PATH
-    echo $LOCAL_TRANSACTION_FILE_PATH
-    echo $LOCAL_LOG_FILE_PATH
-
     # 拉取数据文件
     aws s3 cp $S3_TRANSACTION_FILE_PATH $LOCAL_TRANSACTION_FILE_PATH
-    aws s3 cp $S3_LOGS_FILE_PATH $LOCAL_LOG_FILE_PATH
+    if aws s3 ls $S3_LOGS_FILE_PATH; then
+          aws s3 cp $S3_LOGS_FILE_PATH $LOCAL_LOG_FILE_PATH
+    else
+          echo "Log file does not exist, creating an empty file."
+          touch $LOCAL_LOG_FILE_PATH
+    fi
 
     if [ -f "$LOCAL_TRANSACTION_FILE_PATH" ] && [ -f "$LOCAL_LOG_FILE_PATH" ]; then
         sed -i 's/\"//g' $LOCAL_TRANSACTION_FILE_PATH

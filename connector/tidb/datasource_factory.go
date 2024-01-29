@@ -28,6 +28,7 @@ func init() {
 	tblCreateSqlMap["token_activities"] = "CREATE TABLE IF NOT EXISTS `token_activities` (\n                                    `block_timestamp` datetime(3) NOT NULL COMMENT 'Timestamp of the block containing the inscription (matches block_timestamp in transactions table)',\n                                    `block_number` bigint(20) NOT NULL COMMENT 'Block number containing the inscription (matches block_number in transactions table)',\n                                    `tx_index` int(11) NOT NULL COMMENT 'Index of the transaction containing the inscription (matches transaction_index in transactions table)',\n                                    `tx_hash` varchar(66) NOT NULL COMMENT 'Unique identifier of the transaction containing the inscription (matches hash in transactions table)',\n                                    `log_index` int(11) NOT NULL COMMENT 'Index of the log within the transaction',\n                                    `type` varchar(255) NOT NULL COMMENT 'mint  transfer  burn',\n                                    `tick` varchar(255) NOT NULL COMMENT 'Token tick',\n                                    `id` varchar(255) NOT NULL COMMENT 'Unique identifier of the inscription',\n                                    `amt` decimal(38, 0) DEFAULT NULL COMMENT 'Mint amount',\n                                    `from_address` varchar(42) DEFAULT NULL COMMENT 'Address sending the inscription (matches from_address in transactions table)',\n                                    `to_address` varchar(42) DEFAULT NULL COMMENT 'Address receiving the inscription (match to_address in transactions table)',\n                                    PRIMARY KEY (\n                                                 `id`, `log_index`, `tx_index`, `tick`,\n                                                 `type`\n                                        )\n);\n"
 	tblCreateSqlMap["token_balances"] = "CREATE TABLE `token_balances` (\n                                  `block_number` bigint(20) unsigned DEFAULT NULL COMMENT 'Block number containing the transaction',\n                                  `block_timestamp` datetime(3) DEFAULT NULL COMMENT 'Block timestamp containing the transaction',\n                                  `tick` varchar(255) NOT NULL COMMENT 'Token tick',\n                                  `wallet_address` varchar(42) NOT NULL COMMENT 'Address of owner',\n                                  `total_supply` decimal(38, 0) DEFAULT NULL COMMENT 'Max supply',\n                                  `amount` decimal(38, 0) DEFAULT NULL COMMENT 'The balance of wallet balance at the corresponding block height',\n                                  PRIMARY KEY (`tick`, `wallet_address`)\n);\n"
 	tblCreateSqlMap["token_balances_his"] = "CREATE TABLE `token_balances_his`\n(\n    `block_number`    bigint(20) NOT NULL COMMENT 'Block number containing the transaction',\n    `block_timestamp` datetime(3) DEFAULT NULL COMMENT 'Block timestamp containing the transaction',\n    `tick`            varchar(255) NOT NULL COMMENT 'Token tick',\n    `wallet_address`  varchar(42)  NOT NULL COMMENT 'Address of owner',\n    `total_supply`    decimal(38, 0) DEFAULT NULL COMMENT 'Max supply',\n    `amount`          decimal(38, 0) DEFAULT NULL COMMENT 'The balance of wallet balance at the corresponding block height',\n    PRIMARY KEY (`block_number`,`tick`, `wallet_address`)\n);"
+	tblCreateSqlMap["token_info_his"] = "CREATE TABLE IF NOT EXISTS `token_info_his` (\n    `block_timestamp` datetime(3) NOT NULL COMMENT 'Timestamp of the block containing the inscription (matches block_timestamp in transactions table)',\n    `block_number` bigint(20) NOT NULL COMMENT 'Block number containing the inscription (matches block_number in transactions table)',\n    `tx_index` int(11) NOT NULL COMMENT 'Index of the transaction containing the inscription (matches transaction_index in transactions table)',\n    `tx_hash` varchar(66) NOT NULL COMMENT 'Unique identifier of the transaction containing the inscription (matches hash in transactions table)',\n    `tick` varchar(255) NOT NULL COMMENT 'Token tick',\n    `max_supply` decimal(38, 0) DEFAULT NULL COMMENT 'Max supply',\n    `lim` decimal(38, 0) DEFAULT NULL COMMENT 'Limit of each mint',\n    `wlim` decimal(38, 0) DEFAULT NULL COMMENT 'Limit of each address can maximum mint',\n    `dec` int(11) DEFAULT NULL COMMENT 'Decimal for minimum divie',\n    `creator` varchar(42) DEFAULT NULL COMMENT 'Address originating the inscription (matches from_address in transactions table)',\n    `minted` decimal(38, 0) DEFAULT '0',\n    `holders` decimal(38, 0) DEFAULT '0',\n    `txs` decimal(38, 0) DEFAULT '0',\n    `updated_timestamp` timestamp(3) NULL DEFAULT NULL,\n    `completed_timestamp` timestamp(3) NULL DEFAULT NULL,\n    `id` varchar(255) DEFAULT NULL,\n    PRIMARY KEY (`block_number`,`tick`)\n    );\n"
 }
 
 type Config struct {
@@ -58,7 +59,7 @@ func createDB(tidb_user string, tidb_password string, tidb_host string, tidb_por
 		tidb_user, tidb_password, tidb_host, tidb_port, tidb_db_name)
 
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Error),
+		Logger: logger.Default.LogMode(logger.Info),
 	})
 
 	if err != nil {
@@ -157,6 +158,7 @@ func ProcessUpsert(db *gorm.DB, inscriptions []*model.Inscription, logEvents []*
 	CreateTableIfNotExist(db, model.TokenActivity{}, model.TokenActivity{}.TableName())
 	CreateTableIfNotExist(db, model.TokenBalance{}, model.TokenBalance{}.TableName())
 	CreateTableIfNotExist(db, model.TokenBalanceHis{}, model.TokenBalanceHis{}.TableName())
+	CreateTableIfNotExist(db, model.TokenInfoHis{}, model.TokenInfoHis{}.TableName())
 
 	var defaultBatchSize = 200
 	tx := db.Begin()
@@ -175,6 +177,10 @@ func ProcessUpsert(db *gorm.DB, inscriptions []*model.Inscription, logEvents []*
 	}
 
 	if err := batchUpsert(tx, tokens, defaultBatchSize, model.TokenInfo{}.TableName()); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := batchUpsert(tx, tokens, defaultBatchSize, model.TokenInfoHis{}.TableName()); err != nil {
 		tx.Rollback()
 		return err
 	}
