@@ -803,6 +803,8 @@ func getTokenFromDB(tick string) (*model.Token, bool) {
 	}
 	token, _ = loader.ConvertTokenInfoToToken(tokenInfo)
 	tokens[tick] = token
+	tokenHolders[tick] = make(map[string]*model.DDecimal)
+	tokensByHash[token.Hash] = token
 	return token, true
 }
 
