@@ -6,6 +6,7 @@ import (
 	"open-indexer/connector/tidb"
 	"open-indexer/handlers"
 	"open-indexer/loader"
+	"time"
 )
 
 var (
@@ -36,6 +37,7 @@ func main() {
 
 	db, err := tidb.GetDBInstanceByEnv()
 
+	start := time.Now()
 	tokenList, err := loader.LoadTokenInfo(db)
 	if err != nil {
 		logger.Fatalf("load token info failed, %s", err)
@@ -58,6 +60,10 @@ func main() {
 		logger.Fatalf("set token balances failed, %s", err)
 	}
 
+	duration := time.Since(start)
+	logger.Infof("Load Data from db took: %v ms", duration.Milliseconds())
+
+	start = time.Now()
 	err = loader.GetMaxBlockNumberFromDB(db)
 	if err != nil {
 		logger.Fatalf("get max block number from db failed %s", err)
@@ -72,13 +78,20 @@ func main() {
 		logger.Fatalf("invalid input, %s", err)
 	}
 
+	duration = time.Since(start)
+	logger.Infof("Load Data from files took: %v ms", duration.Milliseconds())
+
+	start = time.Now()
 	records := handlers.MixRecords(trxs, logs)
 
 	err = handlers.ProcessRecords(records)
 	if err != nil {
 		logger.Fatalf("process error, %s", err)
 	}
+	duration = time.Since(start)
+	logger.Infof("Process Datas took: %v ms", duration.Milliseconds())
 
+	start = time.Now()
 	tokenBalances := handlers.GetTokenBalances()
 
 	tokens := handlers.GetTokenInfo()
@@ -94,6 +107,8 @@ func main() {
 	if err != nil {
 		logger.Fatalf("process error, %s", err)
 	}
+	duration = time.Since(start)
+	logger.Infof("Insert Datas into db took: %v ms", duration.Milliseconds())
 
 	logger.Info("Index successed")
 }
