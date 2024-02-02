@@ -648,7 +648,7 @@ func subBalance(owner string, tick string, amount *model.DDecimal, number uint64
 		return false, errors.New("insufficient balance")
 	}
 	fromBalance, ok := fromBalances[token.Tick]
-	if !ok {
+	if !ok || fromBalance == nil {
 		logger.Logger.Infof("Sub balance user: %s doesn't own tick: %s", owner, tick)
 		return false, errors.New("insufficient balance")
 	}
@@ -709,7 +709,7 @@ func addBalance(owner string, tick string, amount *model.DDecimal, number uint64
 	}
 	var newHolder = false
 	toBalance, ok := toBalances[token.Tick]
-	if !ok {
+	if !ok || toBalance == nil {
 		toBalance = model.NewDecimal()
 		newHolder = true
 	}
@@ -755,12 +755,17 @@ func addBalance(owner string, tick string, amount *model.DDecimal, number uint64
 
 func getTokenBalanceFromDB(owner string, tick string) {
 	balances, ok := userBalances[owner]
-	if ok {
-		_, ok := balances[tick]
-		if ok {
-			return
-		}
+	if !ok {
+		balances = make(map[string]*model.DDecimal)
+		userBalances[owner] = balances
 	}
+	_, ok = balances[tick]
+	if !ok {
+		balances[tick] = nil
+	} else {
+		return
+	}
+
 	var balance *model.TokenBalance
 
 	if rerun {
@@ -784,7 +789,7 @@ func getTokenBalanceFromDB(owner string, tick string) {
 		userBalances[owner] = toBalances
 	}
 	toBalance, ok := toBalances[tick]
-	if !ok {
+	if !ok || toBalance == nil {
 		toBalance = model.NewDecimal()
 	}
 
@@ -810,29 +815,38 @@ func getTokenFromDB(tick string, block_number uint64) (*model.Token, bool) {
 	tick = strings.ToLower(tick)
 	token, exists := tokens[tick]
 	if exists {
+		if token == nil {
+			exists = false
+		}
 		return token, exists
 	}
+
 	var tokenInfo *model.TokenInfo
 	if rerun {
 		res := db.Table("token_info_his").Where("block_number <= ? and tick = ?", rerun_start, tick).Order("block_number desc").Limit(1).Scan(&tokenInfo)
 		db.Where("block_number > ? and tick = ?", rerun_start, tick).Delete(model.TokenInfoHis{})
 		if res.RowsAffected == 0 {
 			logger.Logger.Infof("Tick %s not exist in db at %d", tick, rerun_start)
-			return nil, false
+			tokenInfo = nil
 		}
 	} else {
 		res := db.Where("tick=?", tick).Find(&tokenInfo)
 		if res.RowsAffected == 0 {
 			logger.Logger.Infof("Tick %s not exist in db at %d", tick, block_number)
-			return nil, false
+			tokenInfo = nil
 		}
 	}
 
-	token, _ = loader.ConvertTokenInfoToToken(tokenInfo)
+	if tokenInfo != nil {
+		token, _ = loader.ConvertTokenInfoToToken(tokenInfo)
+		exists = true
+	}
 	tokens[tick] = token
 	tokenHolders[tick] = make(map[string]*model.DDecimal)
-	tokensByHash[token.Hash] = token
-	return token, true
+	if token != nil {
+		tokensByHash[token.Hash] = token
+	}
+	return token, exists
 }
 
 func getListFromDB(id string, block_number uint64) (*model.List, bool) {
@@ -845,9 +859,12 @@ func getListFromDB(id string, block_number uint64) (*model.List, bool) {
 	res := db.Where("type=? and tx_hash=?", "list", id).Find(&activity)
 	if res.RowsAffected == 0 {
 		logger.Logger.Infof("List %s not exist in db at %d", id, block_number)
-		return nil, false
+		activity = nil
 	}
-	list, _ = loader.ConvertTokenActivityToList(activity)
+	if activity != nil {
+		list, _ = loader.ConvertTokenActivityToList(activity)
+		exists = true
+	}
 	lists[id] = list
-	return list, true
+	return list, exists
 }
