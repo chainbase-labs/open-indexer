@@ -754,6 +754,13 @@ func addBalance(owner string, tick string, amount *model.DDecimal, number uint64
 */
 
 func getTokenBalanceFromDB(owner string, tick string) {
+	var balance *model.TokenBalance
+
+	exists, _ := tidb.JudgeTableExistOrNot(db, balance.TableName())
+	if !exists {
+		return
+	}
+
 	balances, ok := userBalances[owner]
 	if !ok {
 		balances = make(map[string]*model.DDecimal)
@@ -765,8 +772,6 @@ func getTokenBalanceFromDB(owner string, tick string) {
 	} else {
 		return
 	}
-
-	var balance *model.TokenBalance
 
 	if rerun {
 		res := db.Table("token_balances_his").Where("block_number<=? and wallet_address=? and tick=?", rerun_start, owner, tick).Order("block_number desc").Limit(1).Scan(&balance)
@@ -812,6 +817,11 @@ func getTokenBalanceFromDB(owner string, tick string) {
 }
 
 func getTokenFromDB(tick string, block_number uint64) (*model.Token, bool) {
+	var tokenInfo *model.TokenInfo
+	exists, _ := tidb.JudgeTableExistOrNot(db, tokenInfo.TableName())
+	if !exists {
+		return nil, false
+	}
 	tick = strings.ToLower(tick)
 	token, exists := tokens[tick]
 	if exists {
@@ -821,7 +831,6 @@ func getTokenFromDB(tick string, block_number uint64) (*model.Token, bool) {
 		return token, exists
 	}
 
-	var tokenInfo *model.TokenInfo
 	if rerun {
 		res := db.Table("token_info_his").Where("block_number <= ? and tick = ?", rerun_start, tick).Order("block_number desc").Limit(1).Scan(&tokenInfo)
 		db.Where("block_number > ? and tick = ?", rerun_start, tick).Delete(model.TokenInfoHis{})
@@ -850,12 +859,18 @@ func getTokenFromDB(tick string, block_number uint64) (*model.Token, bool) {
 }
 
 func getListFromDB(id string, block_number uint64) (*model.List, bool) {
+	var activity *model.TokenActivity
+
+	exists, _ := tidb.JudgeTableExistOrNot(db, activity.TableName())
+	if !exists {
+		return nil, false
+	}
+
 	list, exists := lists[id]
 	if exists {
 		return list, exists
 	}
 
-	var activity *model.TokenActivity
 	res := db.Where("type=? and tx_hash=?", "list", id).Find(&activity)
 	if res.RowsAffected == 0 {
 		logger.Logger.Infof("List %s not exist in db at %d", id, block_number)
