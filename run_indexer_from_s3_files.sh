@@ -45,8 +45,13 @@ for FILE in $FILES; do
 
         echo "index avas ...."
         tidb_db_name=$2 tidb_host=$3 tidb_password=$4 tidb_port=$5 tidb_user=$6 ./indexer --transactions $LOCAL_TRANSACTION_FILE_PATH --logs $LOCAL_LOG_FILE_PATH
+        if [ $? -ne 0 ]; then
+          echo "Error processing, exiting loop."
+          break
+        fi
     else
         echo "Failed to download $FILE"
+        break
     fi
 done
 
