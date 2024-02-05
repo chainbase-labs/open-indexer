@@ -754,9 +754,7 @@ func addBalance(owner string, tick string, amount *model.DDecimal, number uint64
 */
 
 func getTokenBalanceFromDB(owner string, tick string) {
-	var balance *model.TokenBalance
-
-	exists, _ := tidb.JudgeTableExistOrNot(db, balance.TableName())
+	exists, _ := tidb.JudgeTableExistOrNot(db, model.TokenBalance{}.TableName())
 	if !exists {
 		return
 	}
@@ -773,6 +771,7 @@ func getTokenBalanceFromDB(owner string, tick string) {
 		return
 	}
 
+	var balance *model.TokenBalance
 	if rerun {
 		res := db.Table("token_balances_his").Where("block_number<=? and wallet_address=? and tick=?", rerun_start, owner, tick).Order("block_number desc").Limit(1).Scan(&balance)
 		db.Where("block_number>? and wallet_address=? and tick=?", rerun_start, owner, tick).Delete(model.TokenBalanceHis{})
@@ -817,8 +816,7 @@ func getTokenBalanceFromDB(owner string, tick string) {
 }
 
 func getTokenFromDB(tick string, block_number uint64) (*model.Token, bool) {
-	var tokenInfo *model.TokenInfo
-	exists, _ := tidb.JudgeTableExistOrNot(db, tokenInfo.TableName())
+	exists, _ := tidb.JudgeTableExistOrNot(db, model.TokenInfo{}.TableName())
 	if !exists {
 		return nil, false
 	}
@@ -830,6 +828,8 @@ func getTokenFromDB(tick string, block_number uint64) (*model.Token, bool) {
 		}
 		return token, exists
 	}
+
+	var tokenInfo *model.TokenInfo
 
 	if rerun {
 		res := db.Table("token_info_his").Where("block_number <= ? and tick = ?", rerun_start, tick).Order("block_number desc").Limit(1).Scan(&tokenInfo)
@@ -859,9 +859,7 @@ func getTokenFromDB(tick string, block_number uint64) (*model.Token, bool) {
 }
 
 func getListFromDB(id string, block_number uint64) (*model.List, bool) {
-	var activity *model.TokenActivity
-
-	exists, _ := tidb.JudgeTableExistOrNot(db, activity.TableName())
+	exists, _ := tidb.JudgeTableExistOrNot(db, model.TokenActivity{}.TableName())
 	if !exists {
 		return nil, false
 	}
@@ -871,6 +869,7 @@ func getListFromDB(id string, block_number uint64) (*model.List, bool) {
 		return list, exists
 	}
 
+	var activity *model.TokenActivity
 	res := db.Where("type=? and tx_hash=?", "list", id).Find(&activity)
 	if res.RowsAffected == 0 {
 		logger.Logger.Infof("List %s not exist in db at %d", id, block_number)
