@@ -278,28 +278,30 @@ func ConvertTransactionETLToTransaction(etl model.TransactionETL) model.Transact
 func ConvertTokensToTokenInfos(tokens map[string]*model.Token) []*model.TokenInfo {
 	var tokenInfos []*model.TokenInfo
 	for _, token := range tokens {
-		tokenInfo := &model.TokenInfo{
-			BlockTimestamp:   time.Unix(int64(token.CreatedAt), 0),
-			BlockNumber:      token.CreatedBlockNumber,
-			ID:               strconv.FormatUint(token.Number, 10),
-			TxIndex:          token.TxIndex,
-			TxHash:           token.TxHash,
-			Tick:             token.Tick,
-			MaxSupply:        token.Max,
-			Lim:              token.Limit,
-			Wlim:             nil,
-			Dec:              token.Precision,
-			Creator:          token.Creator,
-			Minted:           token.Minted,
-			Holders:          token.Holders,
-			Txs:              token.Trxs,
-			UpdatedTimeStamp: time.Unix(int64(token.UpdatedAt), 0),
+		if token != nil {
+			tokenInfo := &model.TokenInfo{
+				BlockTimestamp:   time.Unix(int64(token.CreatedAt), 0),
+				BlockNumber:      token.CreatedBlockNumber,
+				ID:               strconv.FormatUint(token.Number, 10),
+				TxIndex:          token.TxIndex,
+				TxHash:           token.TxHash,
+				Tick:             token.Tick,
+				MaxSupply:        token.Max,
+				Lim:              token.Limit,
+				Wlim:             nil,
+				Dec:              token.Precision,
+				Creator:          token.Creator,
+				Minted:           token.Minted,
+				Holders:          token.Holders,
+				Txs:              token.Trxs,
+				UpdatedTimeStamp: time.Unix(int64(token.UpdatedAt), 0),
+			}
+			if token.CompletedAt != 0 {
+				t := time.Unix(int64(token.CompletedAt), 0)
+				tokenInfo.CompletedAt = &t
+			}
+			tokenInfos = append(tokenInfos, tokenInfo)
 		}
-		if token.CompletedAt != 0 {
-			t := time.Unix(int64(token.CompletedAt), 0)
-			tokenInfo.CompletedAt = &t
-		}
-		tokenInfos = append(tokenInfos, tokenInfo)
 	}
 
 	return tokenInfos
@@ -326,31 +328,6 @@ func ConvertAsc20sToTokenActivities(asc20s []*model.Asc20) []*model.TokenActivit
 		}
 	}
 	return tokenActivities
-}
-
-func LoadTokenInfo(db *gorm.DB) ([]*model.Token, error) {
-	var tokenInfos []*model.TokenInfo
-	var tokens []*model.Token
-	tableName := model.TokenInfo{}.TableName()
-	exist, err := tidb.JudgeTableExistOrNot(db, tableName)
-	if !exist {
-		return tokens, nil
-	}
-
-	if err != nil {
-		return tokens, err
-	}
-
-	err = db.Find(&tokenInfos).Error
-	if err != nil {
-		return tokens, err
-	}
-
-	for _, tokenInfo := range tokenInfos {
-		token, _ := ConvertTokenInfoToToken(tokenInfo)
-		tokens = append(tokens, token)
-	}
-	return tokens, nil
 }
 
 func ConvertTokenInfoToToken(tokenInfo *model.TokenInfo) (*model.Token, error) {
@@ -393,55 +370,6 @@ func ConvertTokenInfoToToken(tokenInfo *model.TokenInfo) (*model.Token, error) {
 	return token, nil
 }
 
-func LoadTokenBalances(db *gorm.DB, rerun bool, rerun_start uint64) ([]*model.TokenBalance, error) {
-	var tokenBalances []*model.TokenBalance
-
-	if rerun {
-		exist, err := tidb.JudgeTableExistOrNot(db, model.TokenBalanceHis{}.TableName())
-		if !exist {
-			return tokenBalances, nil
-		}
-		if err != nil {
-			return tokenBalances, err
-		}
-
-		db.Where("block_number > ?", rerun_start).Delete(&model.TokenBalanceHis{})
-
-		err = db.Raw(`
-WITH RankedTokenBalances AS (
-    SELECT *,
-           ROW_NUMBER() OVER (PARTITION BY wallet_address, tick ORDER BY block_number DESC) as rn
-    FROM token_balances_his
-)
-SELECT * 
-FROM RankedTokenBalances
-WHERE rn = 1
-`).Scan(&tokenBalances).Error
-		if err != nil {
-			return tokenBalances, err
-		}
-	} else {
-		exist, err := tidb.JudgeTableExistOrNot(db, model.TokenBalance{}.TableName())
-		if !exist {
-			return tokenBalances, nil
-		}
-		if err != nil {
-			return tokenBalances, err
-		}
-		err = db.Find(&tokenBalances).Error
-		if err != nil {
-			return tokenBalances, err
-		}
-	}
-
-	for _, tokenBalance := range tokenBalances {
-		if tokenBalance.BlockNumber > maxBlockNumber {
-			maxBlockNumber = tokenBalance.BlockNumber
-		}
-	}
-	return tokenBalances, nil
-}
-
 func SetMaxBlockNumber(max uint64) {
 	maxBlockNumber = max
 }
@@ -460,32 +388,6 @@ func GetMaxBlockNumberFromDB(db *gorm.DB) error {
 		}
 	}
 	return err
-}
-
-func LoadList(db *gorm.DB) ([]*model.List, error) {
-	var tokenActivities []*model.TokenActivity
-	var lists []*model.List
-
-	exist, err := tidb.JudgeTableExistOrNot(db, model.TokenActivity{}.TableName())
-	if !exist {
-		return lists, nil
-	}
-	if err != nil {
-		return lists, err
-	}
-
-	err = db.Where("type = ?", "list").Find(&tokenActivities).Error
-	if err != nil {
-		return lists, err
-	}
-
-	for _, activity := range tokenActivities {
-		if activity.Type == "list" {
-			list, _ := ConvertTokenActivityToList(activity)
-			lists = append(lists, list)
-		}
-	}
-	return lists, nil
 }
 
 func ConvertTokenActivityToList(activity *model.TokenActivity) (*model.List, error) {
